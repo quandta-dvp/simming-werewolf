@@ -37,4 +37,23 @@ if (!config.token) {
   process.exit(1);
 }
 
+// --- Bảo vệ process khỏi bị crash vì lỗi Discord API / lỗi bất ngờ khác ---
+// discord.js relay 1 số lỗi REST/gateway qua client.emit('error', ...); nếu không
+// có listener, Node coi 'error' là event đặc biệt và sẽ throw + crash process.
+client.on('error', (err) => {
+  console.error('[Client Error]', err);
+});
+
+client.on('shardError', (err) => {
+  console.error('[Shard Error]', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('[Unhandled Rejection]', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Uncaught Exception]', err);
+});
+
 client.login(config.token);

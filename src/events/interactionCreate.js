@@ -43,96 +43,102 @@ module.exports = {
 
     // 2. Buttons trong lobby
     if (interaction.isButton()) {
-      const game = gameManager.getGame(interaction.guildId);
+      try {
+        const game = gameManager.getGame(interaction.guildId);
 
-      if (interaction.customId === 'sw_join') {
-        try {
+        if (interaction.customId === 'sw_join') {
           gameManager.join(interaction.guildId, interaction.user.id);
           await interaction.deferUpdate();
           await refreshLobbyMessage(interaction, gameManager.getGame(interaction.guildId));
-        } catch (err) {
-          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+          return;
         }
-        return;
-      }
 
-      if (interaction.customId === 'sw_leave') {
-        try {
+        if (interaction.customId === 'sw_leave') {
           gameManager.leave(interaction.guildId, interaction.user.id);
           await interaction.deferUpdate();
           await refreshLobbyMessage(interaction, gameManager.getGame(interaction.guildId));
-        } catch (err) {
-          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
-        }
-        return;
-      }
-
-      if (interaction.customId === 'sw_view_roles') {
-        await interaction.reply({ embeds: [swCommand.buildRoleListEmbed()], flags: InteractionResponseFlags.Ephemeral });
-        return;
-      }
-
-      if (interaction.customId === 'sw_select_roles') {
-        if (!game || game.hostId !== interaction.user.id) {
-          await interaction.reply({ content: '⛔ Chỉ host mới được chọn vai.', flags: InteractionResponseFlags.Ephemeral });
           return;
         }
-        const options = SELECTABLE_ROLES.map((r) => {
-          const rawDescription = `${r.faction === 'wolf' ? 'Phe Ma Sói' : r.faction === 'third_party' ? 'Phe Thứ 3' : 'Phe Dân Làng'} — ${r.description}`;
-          return {
-            label: r.name,
-            value: r.id,
-            description: rawDescription.length > 100 ? `${rawDescription.slice(0, 97)}...` : rawDescription,
-            emoji: r.emoji,
-            default: game.selectedRoles ? game.selectedRoles.includes(r.id) : false,
-          };
-        });
-        const menu = new StringSelectMenuBuilder()
-          .setCustomId('sw_role_select')
-          .setPlaceholder('Chọn các role muốn đưa vào ván này')
-          .setMinValues(0)
-          .setMaxValues(options.length)
-          .addOptions(options);
-        await interaction.reply({
-          content: 'Chọn role cho ván này (phần còn lại sẽ tự động là Dân Thường / Sói Thường theo tỉ lệ mặc định):',
-          components: [new ActionRowBuilder().addComponents(menu)],
-          flags: InteractionResponseFlags.Ephemeral,
-        });
-        return;
-      }
 
-      if (interaction.customId === 'sw_start') {
-        try {
+        if (interaction.customId === 'sw_view_roles') {
+          await interaction.reply({ embeds: [swCommand.buildRoleListEmbed()], flags: InteractionResponseFlags.Ephemeral });
+          return;
+        }
+
+        if (interaction.customId === 'sw_select_roles') {
+          if (!game) {
+            await interaction.reply({ content: '⚠️ Phòng đã bị đóng hoặc chưa được tạo (có thể bot vừa restart) — dùng `/simwolf create` để tạo phòng mới.', flags: InteractionResponseFlags.Ephemeral });
+            return;
+          }
+          if (game.hostId !== interaction.user.id) {
+            await interaction.reply({ content: '⛔ Chỉ host mới được chọn vai.', flags: InteractionResponseFlags.Ephemeral });
+            return;
+          }
+          const options = SELECTABLE_ROLES.map((r) => {
+            const rawDescription = `${r.faction === 'wolf' ? 'Phe Ma Sói' : r.faction === 'third_party' ? 'Phe Thứ 3' : 'Phe Dân Làng'} — ${r.description}`;
+            return {
+              label: r.name,
+              value: r.id,
+              description: rawDescription.length > 100 ? `${rawDescription.slice(0, 97)}...` : rawDescription,
+              emoji: r.emoji,
+              default: game.selectedRoles ? game.selectedRoles.includes(r.id) : false,
+            };
+          });
+          const menu = new StringSelectMenuBuilder()
+            .setCustomId('sw_role_select')
+            .setPlaceholder('Chọn các role muốn đưa vào ván này')
+            .setMinValues(0)
+            .setMaxValues(options.length)
+            .addOptions(options);
+          await interaction.reply({
+            content: 'Chọn role cho ván này (phần còn lại sẽ tự động là Dân Thường / Sói Thường theo tỉ lệ mặc định):',
+            components: [new ActionRowBuilder().addComponents(menu)],
+            flags: InteractionResponseFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (interaction.customId === 'sw_start') {
           gameManager.startGame(interaction.guildId, interaction.user.id);
           await interaction.reply('▶️ Game bắt đầu! Đang gửi role qua tin nhắn riêng cho từng người chơi... (logic gửi DM + night phase sẽ hoàn thiện ở bước tiếp theo)');
-        } catch (err) {
-          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
-        }
-        return;
-      }
-
-      if (interaction.customId === 'sw_status') {
-        if (!game) {
-          await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: InteractionResponseFlags.Ephemeral });
           return;
         }
-        const alive = [...game.players.values()].filter((p) => p.isAlive).length;
-        await interaction.reply({
-          content: `📄 **Trạng thái:** ${game.status}\n🗓️ Ngày: ${game.dayNumber || 0} — Phase: ${game.phase || 'Chưa bắt đầu'}\n👥 Người chơi còn sống: ${alive}/${game.players.size}`,
-          flags: InteractionResponseFlags.Ephemeral,
-        });
-        return;
-      }
 
-      if (interaction.customId === 'sw_cancel') {
-        if (!game || game.hostId !== interaction.user.id) {
-          await interaction.reply({ content: '⛔ Chỉ host mới được hủy phòng.', flags: InteractionResponseFlags.Ephemeral });
+        if (interaction.customId === 'sw_status') {
+          if (!game) {
+            await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: InteractionResponseFlags.Ephemeral });
+            return;
+          }
+          const alive = [...game.players.values()].filter((p) => p.isAlive).length;
+          await interaction.reply({
+            content: `📄 **Trạng thái:** ${game.status}\n🗓️ Ngày: ${game.dayNumber || 0} — Phase: ${game.phase || 'Chưa bắt đầu'}\n👥 Người chơi còn sống: ${alive}/${game.players.size}`,
+            flags: InteractionResponseFlags.Ephemeral,
+          });
           return;
         }
-        gameManager.cancelGame(interaction.guildId);
-        await interaction.reply('🗑️ Phòng đã được hủy.');
-        return;
+
+        if (interaction.customId === 'sw_cancel') {
+          if (!game) {
+            await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: InteractionResponseFlags.Ephemeral });
+            return;
+          }
+          if (game.hostId !== interaction.user.id) {
+            await interaction.reply({ content: '⛔ Chỉ host mới được hủy phòng.', flags: InteractionResponseFlags.Ephemeral });
+            return;
+          }
+          gameManager.cancelGame(interaction.guildId);
+          await interaction.reply('🗑️ Phòng đã được hủy.');
+          return;
+        }
+      } catch (err) {
+        console.error('[Button interaction error]', err);
+        try {
+          await replyOrFollowUp(interaction, { content: `⚠️ Đã có lỗi xảy ra: ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+        } catch (replyErr) {
+          console.error('[Failed to notify user of button error]', replyErr);
+        }
       }
+      return;
     }
 
     // 3. Select menu chon vai (host)
@@ -148,7 +154,12 @@ module.exports = {
           await lobbyMsg.edit({ embeds: [swCommand.buildLobbyEmbed(game)], components: swCommand.buildLobbyButtons() });
         }
       } catch (err) {
-        await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+        console.error('[Select menu interaction error]', err);
+        try {
+          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+        } catch (replyErr) {
+          console.error('[Failed to notify user of select menu error]', replyErr);
+        }
       }
     }
   },
