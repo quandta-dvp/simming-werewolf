@@ -94,6 +94,14 @@ module.exports = {
         });
       } catch (err) {
         await interaction.reply({ content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+      }
+      return;
+    }
+
+    if (sub === 'help') {
+      const embed = new EmbedBuilder()
+        .setTitle('📖 Hướng Dẫn — Simming Werewolf')
+        .setColor(0x5865f2)
         .setDescription(
           '**Cách chơi cơ bản:**\n'
           + '1. `/simwolf create` để mở phòng chờ.\n'
