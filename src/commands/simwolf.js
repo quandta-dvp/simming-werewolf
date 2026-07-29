@@ -8,6 +8,13 @@ const {
   InteractionResponseFlags,
 } = require('discord.js');
 const { ROLES, MIN_PLAYERS, MAX_PLAYERS } = require('../game/GameManager');
+
+function replyOrFollowUp(interaction, payload) {
+  if (interaction.replied || interaction.deferred) {
+    return interaction.followUp(payload);
+  }
+  return interaction.reply(payload);
+}
 const { FACTION } = require('../game/constants');
 const config = require('../config');
 
@@ -88,12 +95,12 @@ module.exports = {
     if (sub === 'create') {
       try {
         const game = gameManager.createGame(interaction.guildId, interaction.channelId, interaction.user.id);
-        await interaction.reply({
+        await replyOrFollowUp(interaction, {
           embeds: [buildLobbyEmbed(game, interaction.client)],
           components: buildLobbyButtons(),
         });
       } catch (err) {
-        await interaction.reply({ content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+        await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
       }
       return;
     }
@@ -113,20 +120,20 @@ module.exports = {
           + '7. Game kết thúc khi 1 phe thắng — bot công bố toàn bộ role + log cả ván.\n\n'
           + 'Dùng nút **Xem Vai Trò** trong phòng chờ để xem mô tả chi tiết từng role.',
         );
-      await interaction.reply({ embeds: [embed] });
+      await replyOrFollowUp(interaction, { embeds: [embed] });
       return;
     }
 
     if (sub === 'stats') {
       const target = interaction.options.getUser('user') || interaction.user;
-      await interaction.reply({
+      await replyOrFollowUp(interaction, {
         content: `📊 Thống kê cho **${target.username}** — tính năng đang được hoàn thiện (cần kết nối Postgres, xem README phần Database).`,
       });
       return;
     }
 
     if (sub === 'leaderboard') {
-      await interaction.reply({
+      await replyOrFollowUp(interaction, {
         content: '🏆 Bảng xếp hạng — tính năng đang được hoàn thiện (cần kết nối Postgres, xem README phần Database).',
       });
       return;
@@ -134,10 +141,10 @@ module.exports = {
 
     if (sub === 'reload') {
       if (interaction.user.id !== config.ownerId) {
-        await interaction.reply({ content: '⛔ Chỉ Owner bot mới dùng được lệnh này.', flags: InteractionResponseFlags.Ephemeral });
+        await replyOrFollowUp(interaction, { content: '⛔ Chỉ Owner bot mới dùng được lệnh này.', flags: InteractionResponseFlags.Ephemeral });
         return;
       }
-      await interaction.reply({ content: '🔄 Đang tải lại slash command... chạy `npm run deploy-commands` trên server để đăng ký lại, bot sẽ tự nhận diện lệnh mới sau khi restart.' });
+      await replyOrFollowUp(interaction, { content: '🔄 Đang tải lại slash command... chạy `npm run deploy-commands` trên server để đăng ký lại, bot sẽ tự nhận diện lệnh mới sau khi restart.' });
       return;
     }
   },
