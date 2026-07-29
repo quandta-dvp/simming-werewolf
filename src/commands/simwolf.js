@@ -5,7 +5,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   PermissionFlagsBits,
-  InteractionResponseFlags,
+  MessageFlags,
 } = require('discord.js');
 const { ROLES, MIN_PLAYERS, MAX_PLAYERS } = require('../game/GameManager');
 
@@ -100,7 +100,7 @@ module.exports = {
           components: buildLobbyButtons(),
         });
       } catch (err) {
-        await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+        await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -141,7 +141,7 @@ module.exports = {
 
     if (sub === 'reload') {
       if (interaction.user.id !== config.ownerId) {
-        await replyOrFollowUp(interaction, { content: '⛔ Chỉ Owner bot mới dùng được lệnh này.', flags: InteractionResponseFlags.Ephemeral });
+        await replyOrFollowUp(interaction, { content: '⛔ Chỉ Owner bot mới dùng được lệnh này.', flags: MessageFlags.Ephemeral });
         return;
       }
       await replyOrFollowUp(interaction, { content: '🔄 Đang tải lại slash command... chạy `npm run deploy-commands` trên server để đăng ký lại, bot sẽ tự nhận diện lệnh mới sau khi restart.' });

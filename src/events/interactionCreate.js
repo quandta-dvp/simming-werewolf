@@ -1,4 +1,4 @@
-const { ActionRowBuilder, StringSelectMenuBuilder, InteractionResponseFlags } = require('discord.js');
+const { ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const { ROLES } = require('../game/constants');
 const swCommand = require('../commands/simwolf');
 
@@ -35,7 +35,7 @@ module.exports = {
         await command.execute(interaction, { gameManager });
       } catch (err) {
         console.error(err);
-        const payload = { content: `⚠️ Lỗi: ${err.message}`, flags: InteractionResponseFlags.Ephemeral };
+        const payload = { content: `⚠️ Lỗi: ${err.message}`, flags: MessageFlags.Ephemeral };
         await replyOrFollowUp(interaction, payload);
       }
       return;
@@ -61,17 +61,17 @@ module.exports = {
         }
 
         if (interaction.customId === 'sw_view_roles') {
-          await interaction.reply({ embeds: [swCommand.buildRoleListEmbed()], flags: InteractionResponseFlags.Ephemeral });
+          await interaction.reply({ embeds: [swCommand.buildRoleListEmbed()], flags: MessageFlags.Ephemeral });
           return;
         }
 
         if (interaction.customId === 'sw_select_roles') {
           if (!game) {
-            await interaction.reply({ content: '⚠️ Phòng đã bị đóng hoặc chưa được tạo (có thể bot vừa restart) — dùng `/simwolf create` để tạo phòng mới.', flags: InteractionResponseFlags.Ephemeral });
+            await interaction.reply({ content: '⚠️ Phòng đã bị đóng hoặc chưa được tạo (có thể bot vừa restart) — dùng `/simwolf create` để tạo phòng mới.', flags: MessageFlags.Ephemeral });
             return;
           }
           if (game.hostId !== interaction.user.id) {
-            await interaction.reply({ content: '⛔ Chỉ host mới được chọn vai.', flags: InteractionResponseFlags.Ephemeral });
+            await interaction.reply({ content: '⛔ Chỉ host mới được chọn vai.', flags: MessageFlags.Ephemeral });
             return;
           }
           const options = SELECTABLE_ROLES.map((r) => {
@@ -93,7 +93,7 @@ module.exports = {
           await interaction.reply({
             content: 'Chọn role cho ván này (phần còn lại sẽ tự động là Dân Thường / Sói Thường theo tỉ lệ mặc định):',
             components: [new ActionRowBuilder().addComponents(menu)],
-            flags: InteractionResponseFlags.Ephemeral,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -106,24 +106,24 @@ module.exports = {
 
         if (interaction.customId === 'sw_status') {
           if (!game) {
-            await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: InteractionResponseFlags.Ephemeral });
+            await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: MessageFlags.Ephemeral });
             return;
           }
           const alive = [...game.players.values()].filter((p) => p.isAlive).length;
           await interaction.reply({
             content: `📄 **Trạng thái:** ${game.status}\n🗓️ Ngày: ${game.dayNumber || 0} — Phase: ${game.phase || 'Chưa bắt đầu'}\n👥 Người chơi còn sống: ${alive}/${game.players.size}`,
-            flags: InteractionResponseFlags.Ephemeral,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
 
         if (interaction.customId === 'sw_cancel') {
           if (!game) {
-            await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: InteractionResponseFlags.Ephemeral });
+            await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: MessageFlags.Ephemeral });
             return;
           }
           if (game.hostId !== interaction.user.id) {
-            await interaction.reply({ content: '⛔ Chỉ host mới được hủy phòng.', flags: InteractionResponseFlags.Ephemeral });
+            await interaction.reply({ content: '⛔ Chỉ host mới được hủy phòng.', flags: MessageFlags.Ephemeral });
             return;
           }
           gameManager.cancelGame(interaction.guildId);
@@ -133,7 +133,7 @@ module.exports = {
       } catch (err) {
         console.error('[Button interaction error]', err);
         try {
-          await replyOrFollowUp(interaction, { content: `⚠️ Đã có lỗi xảy ra: ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+          await replyOrFollowUp(interaction, { content: `⚠️ Đã có lỗi xảy ra: ${err.message}`, flags: MessageFlags.Ephemeral });
         } catch (replyErr) {
           console.error('[Failed to notify user of button error]', replyErr);
         }
@@ -156,7 +156,7 @@ module.exports = {
       } catch (err) {
         console.error('[Select menu interaction error]', err);
         try {
-          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
+          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: MessageFlags.Ephemeral });
         } catch (replyErr) {
           console.error('[Failed to notify user of select menu error]', replyErr);
         }
