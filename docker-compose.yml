@@ -1,0 +1,23 @@
+services:
+  bot:
+    build: .
+    container_name: simming-werewolf-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: simming-werewolf-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: simwolf
+      POSTGRES_PASSWORD: simwolf
+      POSTGRES_DB: simming_werewolf
+    volumes:
+      - simming_werewolf_pgdata:/var/lib/postgresql/data
+
+volumes:
+  simming_werewolf_pgdata:
