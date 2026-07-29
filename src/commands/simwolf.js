@@ -5,6 +5,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   PermissionFlagsBits,
+  InteractionResponseFlags,
 } = require('discord.js');
 const { ROLES, MIN_PLAYERS, MAX_PLAYERS } = require('../game/GameManager');
 const { FACTION } = require('../game/constants');
@@ -92,15 +93,7 @@ module.exports = {
           components: buildLobbyButtons(),
         });
       } catch (err) {
-        await interaction.reply({ content: `⚠️ ${err.message}`, ephemeral: true });
-      }
-      return;
-    }
-
-    if (sub === 'help') {
-      const embed = new EmbedBuilder()
-        .setTitle('📖 Hướng Dẫn — Simming Werewolf')
-        .setColor(0x5865f2)
+        await interaction.reply({ content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
         .setDescription(
           '**Cách chơi cơ bản:**\n'
           + '1. `/simwolf create` để mở phòng chờ.\n'
@@ -133,7 +126,7 @@ module.exports = {
 
     if (sub === 'reload') {
       if (interaction.user.id !== config.ownerId) {
-        await interaction.reply({ content: '⛔ Chỉ Owner bot mới dùng được lệnh này.', ephemeral: true });
+        await interaction.reply({ content: '⛔ Chỉ Owner bot mới dùng được lệnh này.', flags: InteractionResponseFlags.Ephemeral });
         return;
       }
       await interaction.reply({ content: '🔄 Đang tải lại slash command... chạy `npm run deploy-commands` trên server để đăng ký lại, bot sẽ tự nhận diện lệnh mới sau khi restart.' });

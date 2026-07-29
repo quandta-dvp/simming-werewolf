@@ -1,8 +1,15 @@
-const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { ActionRowBuilder, StringSelectMenuBuilder, InteractionResponseFlags } = require('discord.js');
 const { ROLES } = require('../game/constants');
 const swCommand = require('../commands/simwolf');
 
 const SELECTABLE_ROLES = Object.values(ROLES).filter((r) => !r.isDefaultFiller);
+
+function replyOrFollowUp(interaction, payload) {
+  if (interaction.replied || interaction.deferred) {
+    return interaction.followUp(payload);
+  }
+  return interaction.reply(payload);
+}
 
 async function refreshLobbyMessage(interaction, game) {
   try {
@@ -28,12 +35,8 @@ module.exports = {
         await command.execute(interaction, { gameManager });
       } catch (err) {
         console.error(err);
-        const payload = { content: `⚠️ Lỗi: ${err.message}`, ephemeral: true };
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(payload);
-        } else {
-          await interaction.reply(payload);
-        }
+        const payload = { content: `⚠️ Lỗi: ${err.message}`, flags: InteractionResponseFlags.Ephemeral };
+        await replyOrFollowUp(interaction, payload);
       }
       return;
     }
@@ -48,7 +51,7 @@ module.exports = {
           await interaction.deferUpdate();
           await refreshLobbyMessage(interaction, gameManager.getGame(interaction.guildId));
         } catch (err) {
-          await interaction.reply({ content: `⚠️ ${err.message}`, ephemeral: true });
+          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
         }
         return;
       }
@@ -59,28 +62,31 @@ module.exports = {
           await interaction.deferUpdate();
           await refreshLobbyMessage(interaction, gameManager.getGame(interaction.guildId));
         } catch (err) {
-          await interaction.reply({ content: `⚠️ ${err.message}`, ephemeral: true });
+          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
         }
         return;
       }
 
       if (interaction.customId === 'sw_view_roles') {
-        await interaction.reply({ embeds: [swCommand.buildRoleListEmbed()], ephemeral: true });
+        await interaction.reply({ embeds: [swCommand.buildRoleListEmbed()], flags: InteractionResponseFlags.Ephemeral });
         return;
       }
 
       if (interaction.customId === 'sw_select_roles') {
         if (!game || game.hostId !== interaction.user.id) {
-          await interaction.reply({ content: '⛔ Chỉ host mới được chọn vai.', ephemeral: true });
+          await interaction.reply({ content: '⛔ Chỉ host mới được chọn vai.', flags: InteractionResponseFlags.Ephemeral });
           return;
         }
-        const options = SELECTABLE_ROLES.map((r) => ({
-          label: r.name,
-          value: r.id,
-          description: `${r.faction === 'wolf' ? 'Phe Ma Sói' : r.faction === 'third_party' ? 'Phe Thứ 3' : 'Phe Dân Làng'} — ${r.description.slice(0, 90)}`,
-          emoji: r.emoji,
-          default: game.selectedRoles ? game.selectedRoles.includes(r.id) : false,
-        }));
+        const options = SELECTABLE_ROLES.map((r) => {
+          const rawDescription = `${r.faction === 'wolf' ? 'Phe Ma Sói' : r.faction === 'third_party' ? 'Phe Thứ 3' : 'Phe Dân Làng'} — ${r.description}`;
+          return {
+            label: r.name,
+            value: r.id,
+            description: rawDescription.length > 100 ? `${rawDescription.slice(0, 97)}...` : rawDescription,
+            emoji: r.emoji,
+            default: game.selectedRoles ? game.selectedRoles.includes(r.id) : false,
+          };
+        });
         const menu = new StringSelectMenuBuilder()
           .setCustomId('sw_role_select')
           .setPlaceholder('Chọn các role muốn đưa vào ván này')
@@ -90,7 +96,7 @@ module.exports = {
         await interaction.reply({
           content: 'Chọn role cho ván này (phần còn lại sẽ tự động là Dân Thường / Sói Thường theo tỉ lệ mặc định):',
           components: [new ActionRowBuilder().addComponents(menu)],
-          ephemeral: true,
+          flags: InteractionResponseFlags.Ephemeral,
         });
         return;
       }
@@ -100,27 +106,27 @@ module.exports = {
           gameManager.startGame(interaction.guildId, interaction.user.id);
           await interaction.reply('▶️ Game bắt đầu! Đang gửi role qua tin nhắn riêng cho từng người chơi... (logic gửi DM + night phase sẽ hoàn thiện ở bước tiếp theo)');
         } catch (err) {
-          await interaction.reply({ content: `⚠️ ${err.message}`, ephemeral: true });
+          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
         }
         return;
       }
 
       if (interaction.customId === 'sw_status') {
         if (!game) {
-          await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', ephemeral: true });
+          await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: InteractionResponseFlags.Ephemeral });
           return;
         }
         const alive = [...game.players.values()].filter((p) => p.isAlive).length;
         await interaction.reply({
           content: `📄 **Trạng thái:** ${game.status}\n🗓️ Ngày: ${game.dayNumber || 0} — Phase: ${game.phase || 'Chưa bắt đầu'}\n👥 Người chơi còn sống: ${alive}/${game.players.size}`,
-          ephemeral: true,
+          flags: InteractionResponseFlags.Ephemeral,
         });
         return;
       }
 
       if (interaction.customId === 'sw_cancel') {
         if (!game || game.hostId !== interaction.user.id) {
-          await interaction.reply({ content: '⛔ Chỉ host mới được hủy phòng.', ephemeral: true });
+          await interaction.reply({ content: '⛔ Chỉ host mới được hủy phòng.', flags: InteractionResponseFlags.Ephemeral });
           return;
         }
         gameManager.cancelGame(interaction.guildId);
@@ -142,7 +148,7 @@ module.exports = {
           await lobbyMsg.edit({ embeds: [swCommand.buildLobbyEmbed(game)], components: swCommand.buildLobbyButtons() });
         }
       } catch (err) {
-        await interaction.reply({ content: `⚠️ ${err.message}`, ephemeral: true });
+        await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: InteractionResponseFlags.Ephemeral });
       }
     }
   },
