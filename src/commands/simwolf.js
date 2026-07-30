@@ -83,6 +83,7 @@ module.exports = {
       .setDescription('Xem thống kê của bạn hoặc người khác')
       .addUserOption((opt) => opt.setName('user').setDescription('Người muốn xem thống kê').setRequired(false)))
     .addSubcommand((sub) => sub.setName('leaderboard').setDescription('Xem bảng xếp hạng Ma Sói của server'))
+    .addSubcommand((sub) => sub.setName('panel').setDescription('Hiện lại Bảng Điều Khiển ở cuối kênh (dùng khi bị trôi tin nhắn)'))
     .addSubcommand((sub) => sub.setName('endnight').setDescription('[Host] Kết thúc đêm sớm, dùng khi chờ quá lâu'))
     .addSubcommand((sub) => sub.setName('endvote').setDescription('[Host] Kết thúc vote sớm, dùng khi chờ quá lâu'))
     .addSubcommand((sub) => sub.setName('reload').setDescription('[Owner] Tải lại toàn bộ slash command')),
@@ -140,6 +141,17 @@ module.exports = {
       await replyOrFollowUp(interaction, {
         content: '🏆 Bảng xếp hạng — tính năng đang được hoàn thiện (cần kết nối Postgres, xem README phần Database).',
       });
+      return;
+    }
+
+    if (sub === 'panel') {
+      const game = gameManager.getGame(interaction.guildId);
+      if (!game || game.status !== 'RUNNING') {
+        await replyOrFollowUp(interaction, { content: '⚠️ Không có game nào đang chạy trong server này.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      await replyOrFollowUp(interaction, { content: '📌 Đã đăng lại Bảng Điều Khiển ở cuối kênh.', flags: MessageFlags.Ephemeral });
+      await flow.postOrBumpControlPanel(interaction.client, game);
       return;
     }
 
