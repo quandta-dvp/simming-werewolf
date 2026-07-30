@@ -275,6 +275,18 @@ async function sendNightPrompt(client, game, player) {
     return;
   }
 
+  if (roleId === 'THO_SAN') {
+    const options = aliveOptions(game, { excludeUserId: player.userId });
+    if (!options.length) return;
+    const menu = new StringSelectMenuBuilder().setCustomId('sw_hunter_pick').setPlaceholder('Chọn người để nhắm trước').addOptions(options);
+    const current = player.state.hunterTarget ? `\n_Hiện đang nhắm: **${nameOf(game, player.state.hunterTarget)}**_` : '';
+    await sendToRoleChannel(client, game, group, player.userId, {
+      content: `🏹 <@${player.userId}> — **Đêm ${game.dayNumber} — Thợ Săn**\nChọn trước 1 người — nếu bạn chết (đêm hoặc bị treo), người này sẽ chết theo ngay lập tức:${current}`,
+      components: [new ActionRowBuilder().addComponents(menu)],
+    });
+    return;
+  }
+
   if (roleId === 'SOI_THUONG' || roleId === 'SOI_NGUYEN' || roleId === 'SOI_CON') {
     // Chi gui 1 lan cho ca bay (tranh spam nhieu tin nhac giong nhau) - kiem tra cờ da gui chua
     if (!game.night.wolfPromptSent) {
@@ -367,8 +379,6 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
     : '☀️ Đêm qua không ai chết.';
   await channelSend(client, game.channelId, `☀️ **Ngày ${game.dayNumber}**\n${deathText}`);
 
-  await handleHunterTriggers(client, game, result.hunterTriggerUserIds);
-
   const winner = engine.checkWinner(game);
   if (winner) {
     await endGame(client, gameManager, game, winner);
@@ -378,22 +388,6 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
   game.phase = 'DAY_DISCUSS';
   await postOrBumpControlPanel(client, game);
   await channelSend(client, game.channelId, `💬 Mọi người thảo luận. Host bấm **Mở Vote** trên bảng điều khiển khi sẵn sàng.`);
-}
-
-async function handleHunterTriggers(client, game, hunterUserIds) {
-  for (const userId of hunterUserIds) {
-    const options = aliveOptions(game, { excludeUserId: userId });
-    if (!options.length) continue;
-    const menu = new StringSelectMenuBuilder().setCustomId('sw_hunter_shoot').setPlaceholder('Chọn người để bắn theo').addOptions(options);
-    try {
-      await dmUser(client, userId, {
-        content: '🏹 Bạn vừa chết! Trước khi nhắm mắt, chọn 1 người để bắn chết theo:',
-        components: [new ActionRowBuilder().addComponents(menu)],
-      });
-    } catch (err) {
-      console.error('[handleHunterTriggers] lỗi:', err.message);
-    }
-  }
 }
 
 // ============ DAY VOTE ============
@@ -440,15 +434,15 @@ async function resolveAndAnnounceDayVote(client, gameManager, game) {
     await channelSend(client, game.channelId, result.tie ? '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.' : '🗳️ Không đủ phiếu / chọn không treo ai — không ai bị treo cổ hôm nay.');
   } else {
     await channelSend(client, game.channelId, `⚰️ **${nameOf(game, result.lynchedUserId)}** đã bị dân làng treo cổ.`);
+    if (result.extraDeaths && result.extraDeaths.length) {
+      const extraNames = result.extraDeaths.map((d) => nameOf(game, d.userId));
+      await channelSend(client, game.channelId, extraNames.map((n) => `💀 **${n}** cũng chết theo.`).join('\n'));
+    }
   }
 
   if (result.foolWins) {
     await endGame(client, gameManager, game, 'FOOL', { extraWinnerUserId: result.lynchedUserId });
     return;
-  }
-
-  if (result.hunterTriggered) {
-    await handleHunterTriggers(client, game, [result.hunterTriggered]);
   }
 
   const winner = engine.checkWinner(game);

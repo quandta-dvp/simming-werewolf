@@ -138,8 +138,8 @@ class GameManager {
 
   static threadGroupOf(roleId) {
     if (roleId === 'SOI_THUONG' || roleId === 'SOI_NGUYEN' || roleId === 'SOI_CON') return 'WOLVES';
-    if (roleId === 'TIEN_TRI' || roleId === 'BAO_VE' || roleId === 'PHU_THUY' || roleId === 'CAVE') return roleId;
-    return null; // DAN_THUONG, THO_SAN, THANG_NGO, BAN_SOI (chua can) - khong co thread rieng
+    if (roleId === 'TIEN_TRI' || roleId === 'BAO_VE' || roleId === 'PHU_THUY' || roleId === 'CAVE' || roleId === 'THO_SAN') return roleId;
+    return null; // DAN_THUONG, THANG_NGO, BAN_SOI (chua can) - khong co thread rieng
   }
 
   // ---------- Night state ----------
@@ -217,6 +217,12 @@ class GameManager {
 
   submitSeerTarget(game, userId, targetId) {
     game.night.seerTarget = targetId;
+    game.night.submittedUserIds.add(userId);
+  }
+
+  submitHunterTarget(game, userId, targetId) {
+    const player = game.players.get(userId);
+    player.state.hunterTarget = targetId; // luon ghi de - dung lua chon gan nhat neu Tho San chet
     game.night.submittedUserIds.add(userId);
   }
 

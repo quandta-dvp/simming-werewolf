@@ -48,9 +48,8 @@ const ROLES = {
     name: 'Thợ Săn',
     emoji: '🏹',
     faction: FACTION.VILLAGER,
-    hasNightAction: false,
-    triggerOnDeath: true,
-    description: 'Khi chết (do bất kỳ nguyên nhân gì), được bắn chết theo 1 người khác.',
+    hasNightAction: true,
+    description: 'Mỗi đêm chọn trước 1 người. Nếu Thợ Săn chết (do bất kỳ nguyên nhân gì, đêm hoặc bị treo), người được chọn cũng chết theo ngay lập tức.',
     isDefaultCandidate: true,
   },
   CAVE: {

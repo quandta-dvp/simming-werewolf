@@ -23,6 +23,26 @@ function checkWinner(game) {
   return null;
 }
 
+// Neu 1 nguoi vua chet la Tho San va da chon truoc 1 muc tieu, muc tieu do chet theo ngay lap tuc.
+// Xu ly dang queue vi muc tieu bi keo theo cung co the la Tho San khac (hiem nhung van xu ly dung).
+function applyHunterCascade(game, deathList, log) {
+  const queue = [...deathList];
+  while (queue.length) {
+    const { userId } = queue.shift();
+    const p = game.players.get(userId);
+    if (!p || p.roleId !== 'THO_SAN') continue;
+    const targetId = p.state.hunterTarget;
+    if (!targetId) continue;
+    const target = game.players.get(targetId);
+    if (!target || !target.isAlive) continue;
+    target.isAlive = false;
+    const entry = { userId: targetId, cause: 'hunter_shot' };
+    deathList.push(entry);
+    queue.push(entry);
+    log.push({ userId: targetId, text: `bị Thợ Săn (${game.displayNames?.get(userId) || userId}) bắn chết theo` });
+  }
+}
+
 function pickTopVoted(voteMap, topN = 1) {
   // voteMap: Map(voterId -> targetId). Tra ve mang targetId co nhieu vote nhat (topN muc).
   const tally = new Map();
@@ -101,21 +121,22 @@ function resolveNight(game) {
     game.cursedUserIds.add(night.curseTarget);
   }
 
-  // --- Ap dung deaths ---
+  // --- Ap dung deaths (dot 1: tu Soi/Phu Thuy) ---
   const deathList = [];
-  const hunterTriggerUserIds = [];
   for (const [userId, cause] of deaths.entries()) {
     const p = game.players.get(userId);
     if (!p || !p.isAlive) continue;
     p.isAlive = false;
     deathList.push({ userId, cause });
     log.push({ userId, text: cause === 'witch_poison' ? 'bị Phù Thủy đầu độc' : 'bị Sói cắn chết' });
-    if (p.roleId === 'THO_SAN') hunterTriggerUserIds.push(userId);
     if (p.roleId === 'SOI_CON' && !game.wolfCubBonusUsed) {
       game.wolfCubBonusUsed = true;
       game.wolfCubBonusPending = true; // dem ke tiep se can 2
     }
   }
+
+  // --- Tho San: neu chet, keo theo muc tieu da chon truoc do (xu ly cascade) ---
+  applyHunterCascade(game, deathList, log);
 
   // --- Seer ---
   const seerResults = [];
@@ -138,7 +159,6 @@ function resolveNight(game) {
     deaths: deathList,
     convertedBanSoi,
     seerResults,
-    hunterTriggerUserIds,
     witchRawTargets: wolfRawTargets, // dung de bao phu thuy o dem ke tiep / hien tai
     log,
   };
@@ -161,13 +181,16 @@ function resolveDayVote(game) {
   const lynchedUserId = sorted[0][0];
   const player = game.players.get(lynchedUserId);
   player.isAlive = false;
-  const result = { lynchedUserId, log: [{ userId: lynchedUserId, text: 'bị dân làng treo cổ' }] };
-  if (player.roleId === 'THO_SAN') result.hunterTriggered = lynchedUserId;
+  const log = [{ userId: lynchedUserId, text: 'bị dân làng treo cổ' }];
+  const deathList = [{ userId: lynchedUserId, cause: 'lynched' }];
+  const result = { lynchedUserId, log, deaths: deathList };
   if (player.roleId === 'THANG_NGO') result.foolWins = true;
   if (player.roleId === 'SOI_CON' && !game.wolfCubBonusUsed) {
     game.wolfCubBonusUsed = true;
     game.wolfCubBonusPending = true;
   }
+  applyHunterCascade(game, deathList, log); // neu nguoi bi treo la Tho San, muc tieu da chon truoc chet theo
+  result.extraDeaths = deathList.slice(1); // nhung nguoi chet an theo (Tho San keo theo)
   return result;
 }
 

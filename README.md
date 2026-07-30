@@ -111,7 +111,7 @@ src/
 - [x] Vote ngày có thêm lựa chọn "Không treo ai"
 - [x] Đóng (archive + lock) toàn bộ thread khi game kết thúc
 - [x] Integration test mô phỏng toàn bộ 1 ván kèm thread/panel (`test/integration.test.js`)
-- [ ] Riêng Thợ Săn (trigger bắn theo khi chết) vẫn dùng DM vì không có thread cố định — cân nhắc đổi sang thread tạm nếu cần
+- [x] Thợ Săn: đổi cơ chế thành chọn trước 1 mục tiêu mỗi đêm (có thread riêng như các role khác) — nếu Thợ Săn chết (đêm hoặc bị treo), mục tiêu đã chọn chết theo ngay lập tức (không còn chọn sau khi chết qua DM)
 - [ ] Ghi `game_logs` mỗi đêm, render bảng tổng kết dạng ảnh (puppeteer) khi kết thúc game
 - [ ] Sync game state xuống Postgres để sống sót qua restart (hiện toàn bộ state chỉ nằm trong RAM)
 - [ ] Kết nối `/simwolf stats` và `/simwolf leaderboard` với view `player_stats` trong Postgres

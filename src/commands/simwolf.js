@@ -118,7 +118,7 @@ module.exports = {
           + '2. Mọi người bấm **Tham Gia** (tối thiểu 6, tối đa 20 người).\n'
           + '3. Host bấm **Chọn Vai** để tùy chỉnh role, hoặc để trống dùng bộ mặc định.\n'
           + '4. Host bấm **Bắt Đầu Game** — bot random vai trò, mỗi người bấm nút **Xem Vai Trò Của Bạn** để xem role riêng (chỉ mình bạn thấy).\n'
-          + '5. Bot tạo **thread riêng cho từng vai trò có chức năng** (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Bầy Sói) — Host được thêm vào mọi thread để theo dõi (không chơi).\n'
+          + '5. Bot tạo **thread riêng cho từng vai trò có chức năng** (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Thợ Săn, Bầy Sói) — Host được thêm vào mọi thread để theo dõi (không chơi).\n'
           + '6. Đêm: vào thread tương ứng để thao tác (bầy Sói thấy vote của nhau ngay trong thread).\n'
           + '7. Ngày: bot công bố ai chết (không lộ role) → mọi người thảo luận → Host bấm **Mở Vote** trên **Bảng Điều Khiển** khi sẵn sàng.\n'
           + '8. **Bảng Điều Khiển** (nút 🔄 Cập Nhật ai cũng bấm được) luôn hiện: đang đêm/ngày mấy, ai còn sống/đã chết. Host có thêm nút Bỏ Qua Đêm/Ngày, Mở Vote, Kết Thúc Vote.\n'

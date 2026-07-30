@@ -248,10 +248,8 @@ module.exports = {
           return;
         }
 
-        // sw_hunter_shoot van qua DM (khong co thread rieng cho Tho San)
-        const game = interaction.customId === 'sw_hunter_shoot'
-          ? gameManager.getGameByPlayer(interaction.user.id)
-          : gameManager.getGame(interaction.guildId);
+        // Tat ca select menu trong game (thread) deu tra ve tu guild - khong con truong hop DM rieng nao nua
+        const game = gameManager.getGame(interaction.guildId);
 
         if (!game) {
           await interaction.reply({ content: '⚠️ Không tìm thấy game đang chạy (có thể đã kết thúc hoặc bot vừa restart).', flags: MessageFlags.Ephemeral });
@@ -332,18 +330,11 @@ module.exports = {
           return;
         }
 
-        if (interaction.customId === 'sw_hunter_shoot') {
-          const target = game.players.get(targetId);
-          if (target && target.isAlive) {
-            target.isAlive = false;
-            await interaction.update({ content: `🏹 Bạn đã bắn chết ${flow.nameOf(game, targetId)} trước khi nhắm mắt.`, components: [] });
-            await flow.cacheDisplayNames(interaction.client, game);
-            await interaction.client.channels.fetch(game.channelId).then((ch) => ch.send(`🏹 Trước khi chết, Thợ Săn đã bắn theo **${flow.nameOf(game, targetId)}**.`)).catch(() => {});
-            const winner = engine.checkWinner(game);
-            if (winner) await flow.endGame(interaction.client, gameManager, game, winner);
-          } else {
-            await interaction.update({ content: '⚠️ Mục tiêu không còn hợp lệ.', components: [] });
-          }
+        if (interaction.customId === 'sw_hunter_pick') {
+          requireRoleHolder(game, 'THO_SAN', interaction.user.id);
+          gameManager.submitHunterTarget(game, interaction.user.id, targetId);
+          await interaction.update({ content: `🏹 Đã ghi nhận mục tiêu nhắm trước: **${flow.nameOf(game, targetId)}**.`, components: [] });
+          await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
 
