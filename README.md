@@ -102,13 +102,15 @@ src/
 
 ## 8. Roadmap tiếp theo
 
-- [ ] Gửi DM role riêng cho từng người khi start game
-- [ ] Night phase: select menu action theo từng role (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Sói...)
-- [ ] Kênh/thread riêng cho bầy Sói bàn bạc + vote cắn chung
-- [ ] Day phase: công bố người chết (không lộ role) → thảo luận → vote treo cổ
-- [ ] Check điều kiện thắng sau mỗi lần có người chết
-- [ ] Ghi `game_logs` mỗi đêm, render bảng tổng kết dạng ảnh (puppeteer) khi kết thúc game
-- [ ] Mở lại quyền chat cho người chết sau khi bảng tổng kết được post
+- [x] Gửi DM role riêng cho từng người khi start game
+- [x] Night phase: select menu action theo từng role (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Sói, Sói Nguyền, Sói Con, Bán Sói, Thợ Săn, Thằng Ngố)
+- [x] Day phase: công bố người chết (không lộ role) → vote treo cổ (tự chốt khi mọi người vote, hoặc host `/simwolf endnight` / `/simwolf endvote` để ép sớm)
+- [x] Check điều kiện thắng sau mỗi lần có người chết
+- [x] Integration test mô phỏng toàn bộ 1 ván (`test/integration.test.js`, chạy `node test/integration.test.js`)
+- [ ] Bầy Sói hiện chỉ vote qua DM riêng từng người — chưa có "shared view" thấy lựa chọn của nhau (đơn giản hoá so với thiết kế ban đầu, cần làm thêm nếu muốn)
+- [ ] Ghi `game_logs` mỗi đêm, render bảng tổng kết dạng ảnh (puppeteer) khi kết thúc game (hiện chỉ có embed liệt kê role, chưa có bảng log chi tiết từng đêm)
+- [ ] Mở lại quyền chat cho người chết sau khi bảng tổng kết được post (hiện chưa có logic khoá/mở quyền kênh)
+- [ ] Sync game state xuống Postgres để sống sót qua restart (hiện toàn bộ state chỉ nằm trong RAM)
 - [ ] Kết nối `/simwolf stats` và `/simwolf leaderboard` với view `player_stats` trong Postgres
 
 ---
