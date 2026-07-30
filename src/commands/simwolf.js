@@ -83,13 +83,15 @@ module.exports = {
       .setDescription('Xem thống kê của bạn hoặc người khác')
       .addUserOption((opt) => opt.setName('user').setDescription('Người muốn xem thống kê').setRequired(false)))
     .addSubcommand((sub) => sub.setName('leaderboard').setDescription('Xem bảng xếp hạng Ma Sói của server'))
+    .addSubcommand((sub) => sub.setName('endnight').setDescription('[Host] Kết thúc đêm sớm, dùng khi chờ quá lâu'))
+    .addSubcommand((sub) => sub.setName('endvote').setDescription('[Host] Kết thúc vote sớm, dùng khi chờ quá lâu'))
     .addSubcommand((sub) => sub.setName('reload').setDescription('[Owner] Tải lại toàn bộ slash command')),
 
   buildLobbyEmbed,
   buildLobbyButtons,
   buildRoleListEmbed,
 
-  async execute(interaction, { gameManager }) {
+  async execute(interaction, { gameManager, flow }) {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'create') {
@@ -136,6 +138,40 @@ module.exports = {
       await replyOrFollowUp(interaction, {
         content: '🏆 Bảng xếp hạng — tính năng đang được hoàn thiện (cần kết nối Postgres, xem README phần Database).',
       });
+      return;
+    }
+
+    if (sub === 'endnight') {
+      const game = gameManager.getGame(interaction.guildId);
+      if (!game || game.status !== 'RUNNING' || game.phase !== 'NIGHT') {
+        await replyOrFollowUp(interaction, { content: '⚠️ Hiện không phải đang trong đêm.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      if (game.hostId !== interaction.user.id) {
+        await replyOrFollowUp(interaction, { content: '⛔ Chỉ host mới được kết thúc đêm sớm.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      await replyOrFollowUp(interaction, '⏩ Host đã kết thúc đêm sớm — đang xử lý kết quả...');
+      await flow.resolveAndAnnounceNight(interaction.client, gameManager, game);
+      return;
+    }
+
+    if (sub === 'endvote') {
+      const game = gameManager.getGame(interaction.guildId);
+      if (!game || game.status !== 'RUNNING' || game.phase !== 'DAY_VOTE') {
+        await replyOrFollowUp(interaction, { content: '⚠️ Hiện không phải đang trong vote.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      if (game.hostId !== interaction.user.id) {
+        await replyOrFollowUp(interaction, { content: '⛔ Chỉ host mới được kết thúc vote sớm.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      // Nguoi chua vote coi nhu bo phieu trang (khong tinh)
+      for (const p of gameManager.getAlivePlayers(game)) {
+        if (!game.dayVotes.has(p.userId)) game.dayVotes.set(p.userId, null);
+      }
+      await replyOrFollowUp(interaction, '⏩ Host đã kết thúc vote sớm — đang xử lý kết quả...');
+      await flow.resolveAndAnnounceDayVote(interaction.client, gameManager, game);
       return;
     }
 
