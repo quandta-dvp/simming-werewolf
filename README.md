@@ -22,7 +22,7 @@ Discord bot hỗ trợ chơi Ma Sói (Werewolf) — 3 phe (Dân Làng / Ma Sói 
 4. Vào tab **OAuth2 → General**, copy **Application ID** (dùng cho `DISCORD_CLIENT_ID`).
 5. Vào tab **OAuth2 → URL Generator**:
    - Scopes: tick `bot` và `applications.commands`.
-   - Bot Permissions: tick `Send Messages`, `Embed Links`, `Use Slash Commands`, `Manage Messages` (để edit lobby message), `Read Message History`.
+   - Bot Permissions: tick `Send Messages`, `Embed Links`, `Use Slash Commands`, `Manage Messages` (để edit lobby message), `Read Message History`, `Create Private Threads`, `Send Messages in Threads` (bắt buộc — bot dùng thread riêng cho từng vai trò: Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Bầy Sói).
    - Copy URL ở cuối trang → mở URL này để mời (authorize) bot vào server test của anh.
 
 ## 3. Cấu hình biến môi trường
@@ -102,14 +102,17 @@ src/
 
 ## 8. Roadmap tiếp theo
 
-- [x] Gửi DM role riêng cho từng người khi start game
-- [x] Night phase: select menu action theo từng role (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Sói, Sói Nguyền, Sói Con, Bán Sói, Thợ Săn, Thằng Ngố)
-- [x] Day phase: công bố người chết (không lộ role) → vote treo cổ (tự chốt khi mọi người vote, hoặc host `/simwolf endnight` / `/simwolf endvote` để ép sớm)
-- [x] Check điều kiện thắng sau mỗi lần có người chết
-- [x] Integration test mô phỏng toàn bộ 1 ván (`test/integration.test.js`, chạy `node test/integration.test.js`)
-- [ ] Bầy Sói hiện chỉ vote qua DM riêng từng người — chưa có "shared view" thấy lựa chọn của nhau (đơn giản hoá so với thiết kế ban đầu, cần làm thêm nếu muốn)
-- [ ] Ghi `game_logs` mỗi đêm, render bảng tổng kết dạng ảnh (puppeteer) khi kết thúc game (hiện chỉ có embed liệt kê role, chưa có bảng log chi tiết từng đêm)
-- [ ] Mở lại quyền chat cho người chết sau khi bảng tổng kết được post (hiện chưa có logic khoá/mở quyền kênh)
+- [x] Random vai trò + nút "Xem Vai Trò Của Bạn" (ephemeral, host thấy full, người chơi chỉ thấy vai của mình)
+- [x] Thread riêng theo từng vai trò có chức năng (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Bầy Sói) — Host được thêm vào tất cả để theo dõi, không thao tác được
+- [x] Bầy Sói vote cắn chung trong 1 thread, thấy lựa chọn của nhau real-time (không còn DM riêng lẻ)
+- [x] Bán Sói tự động được thêm vào thread Bầy Sói khi bị cắn trúng và chuyển phe
+- [x] Bảng Điều Khiển công khai (bump được bởi bất kỳ ai) hiện: phase hiện tại, ai còn sống/đã chết, số lượng role
+- [x] Host có nút Bỏ Qua Đêm/Ngày, Mở Vote (thay vì tự động mở), Kết Thúc Vote — cùng slash command dự phòng `/simwolf endnight` / `/simwolf endvote`
+- [x] Vote ngày có thêm lựa chọn "Không treo ai"
+- [x] Đóng (archive + lock) toàn bộ thread khi game kết thúc
+- [x] Integration test mô phỏng toàn bộ 1 ván kèm thread/panel (`test/integration.test.js`)
+- [ ] Riêng Thợ Săn (trigger bắn theo khi chết) vẫn dùng DM vì không có thread cố định — cân nhắc đổi sang thread tạm nếu cần
+- [ ] Ghi `game_logs` mỗi đêm, render bảng tổng kết dạng ảnh (puppeteer) khi kết thúc game
 - [ ] Sync game state xuống Postgres để sống sót qua restart (hiện toàn bộ state chỉ nằm trong RAM)
 - [ ] Kết nối `/simwolf stats` và `/simwolf leaderboard` với view `player_stats` trong Postgres
 

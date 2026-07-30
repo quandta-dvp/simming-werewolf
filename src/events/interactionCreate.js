@@ -2,6 +2,7 @@ const { ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('dis
 const { ROLES, FACTION } = require('../game/constants');
 const swCommand = require('../commands/simwolf');
 const flow = require('../game/flow');
+const engine = require('../game/engine');
 
 const SELECTABLE_ROLES = Object.values(ROLES).filter((r) => !r.isDefaultFiller);
 
@@ -20,6 +21,14 @@ async function refreshLobbyMessage(interaction, game) {
     });
   } catch (err) {
     console.error('Không thể refresh lobby message:', err);
+  }
+}
+
+// Kiem tra nguoi bam co dung la nguoi giu role nay khong (host cung o trong thread nhung chi de xem)
+function requireRoleHolder(game, roleId, userId) {
+  const player = game.players.get(userId);
+  if (!player || !player.isAlive || player.roleId !== roleId) {
+    throw new Error('Bạn không phải người giữ vai trò này (host chỉ xem được, không thao tác).');
   }
 }
 
@@ -42,7 +51,7 @@ module.exports = {
       return;
     }
 
-    // 2. Buttons trong lobby
+    // 2. Buttons
     if (interaction.isButton()) {
       try {
         const game = gameManager.getGame(interaction.guildId);
@@ -68,7 +77,7 @@ module.exports = {
 
         if (interaction.customId === 'sw_select_roles') {
           if (!game) {
-            await interaction.reply({ content: '⚠️ Phòng đã bị đóng hoặc chưa được tạo (có thể bot vừa restart) — dùng `/simwolf create` để tạo phòng mới.', flags: MessageFlags.Ephemeral });
+            await interaction.reply({ content: '⚠️ Phòng đã bị đóng hoặc chưa được tạo — dùng `/simwolf create` để tạo phòng mới.', flags: MessageFlags.Ephemeral });
             return;
           }
           if (game.hostId !== interaction.user.id) {
@@ -101,8 +110,89 @@ module.exports = {
 
         if (interaction.customId === 'sw_start') {
           const started = gameManager.startGame(interaction.guildId, interaction.user.id);
-          await interaction.reply('▶️ Game bắt đầu! Đang random vai trò và nhắn tin riêng cho từng người...');
+          await interaction.reply('▶️ Game bắt đầu! Đang random vai trò, tạo thread riêng và gửi thông báo...');
+          await flow.sendRoleRevealAnnouncement(interaction.client, started);
+          await flow.setupRoleThreads(interaction.client, started);
+          await flow.postOrBumpControlPanel(interaction.client, started);
           await flow.beginNight(interaction.client, gameManager, started);
+          return;
+        }
+
+        if (interaction.customId === 'sw_show_role') {
+          if (!game || game.status !== 'RUNNING') {
+            await interaction.reply({ content: '⚠️ Game chưa bắt đầu hoặc đã kết thúc.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          if (interaction.user.id === game.hostId) {
+            await interaction.reply({ embeds: [flow.buildFullRoleListEmbed(game)], flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const player = game.players.get(interaction.user.id);
+          if (!player) {
+            await interaction.reply({ content: '⚠️ Bạn không tham gia ván này.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          await interaction.reply({ embeds: [flow.buildOwnRoleEmbed(game, player)], flags: MessageFlags.Ephemeral });
+          return;
+        }
+
+        if (interaction.customId === 'sw_panel_bump') {
+          if (!game) {
+            await interaction.reply({ content: '⚠️ Không có game nào đang chạy.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          await interaction.deferUpdate();
+          await flow.postOrBumpControlPanel(interaction.client, game);
+          return;
+        }
+
+        if (interaction.customId === 'sw_panel_skip') {
+          if (!game || game.hostId !== interaction.user.id) {
+            await interaction.reply({ content: '⛔ Chỉ host mới được bỏ qua đêm/ngày.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          await interaction.deferUpdate();
+          if (game.phase === 'NIGHT') {
+            await flow.resolveAndAnnounceNight(interaction.client, gameManager, game);
+          } else if (game.phase === 'DAY_VOTE') {
+            for (const p of gameManager.getAlivePlayers(game)) {
+              if (!game.dayVotes.has(p.userId)) game.dayVotes.set(p.userId, null);
+            }
+            await flow.resolveAndAnnounceDayVote(interaction.client, gameManager, game);
+          } else {
+            await interaction.followUp({ content: 'ℹ️ Đang trong lúc thảo luận — dùng nút **Mở Vote** để chuyển sang bỏ phiếu.', flags: MessageFlags.Ephemeral });
+          }
+          return;
+        }
+
+        if (interaction.customId === 'sw_panel_open_vote') {
+          if (!game || game.hostId !== interaction.user.id) {
+            await interaction.reply({ content: '⛔ Chỉ host mới được mở vote.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          if (game.phase !== 'DAY_DISCUSS') {
+            await interaction.reply({ content: '⚠️ Hiện không phải lúc thảo luận ngày.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          await interaction.deferUpdate();
+          await flow.openDayVote(interaction.client, gameManager, game);
+          return;
+        }
+
+        if (interaction.customId === 'sw_panel_end_vote') {
+          if (!game || game.hostId !== interaction.user.id) {
+            await interaction.reply({ content: '⛔ Chỉ host mới được kết thúc vote.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          if (game.phase !== 'DAY_VOTE') {
+            await interaction.reply({ content: '⚠️ Hiện không phải đang trong vote.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          await interaction.deferUpdate();
+          for (const p of gameManager.getAlivePlayers(game)) {
+            if (!game.dayVotes.has(p.userId)) game.dayVotes.set(p.userId, null);
+          }
+          await flow.resolveAndAnnounceDayVote(interaction.client, gameManager, game);
           return;
         }
 
@@ -146,7 +236,6 @@ module.exports = {
     // 3. Select menu
     if (interaction.isStringSelectMenu()) {
       try {
-        // 3a. Host chon vai trong lobby (trong guild)
         if (interaction.customId === 'sw_role_select') {
           gameManager.setSelectedRoles(interaction.guildId, interaction.user.id, interaction.values);
           await interaction.update({ content: `✅ Đã chọn: ${interaction.values.map((v) => ROLES[v].name).join(', ') || '(không có, dùng mặc định)'}`, components: [] });
@@ -159,10 +248,10 @@ module.exports = {
           return;
         }
 
-        // 3b. Cac select menu con lai deu den tu DM (night action) hoac message cong khai (day vote)
-        const game = interaction.guildId
-          ? gameManager.getGame(interaction.guildId)
-          : gameManager.getGameByPlayer(interaction.user.id);
+        // sw_hunter_shoot van qua DM (khong co thread rieng cho Tho San)
+        const game = interaction.customId === 'sw_hunter_shoot'
+          ? gameManager.getGameByPlayer(interaction.user.id)
+          : gameManager.getGame(interaction.guildId);
 
         if (!game) {
           await interaction.reply({ content: '⚠️ Không tìm thấy game đang chạy (có thể đã kết thúc hoặc bot vừa restart).', flags: MessageFlags.Ephemeral });
@@ -172,13 +261,15 @@ module.exports = {
         const targetId = interaction.values[0];
 
         if (interaction.customId === 'sw_seer_pick') {
+          requireRoleHolder(game, 'TIEN_TRI', interaction.user.id);
           gameManager.submitSeerTarget(game, interaction.user.id, targetId);
-          await interaction.update({ content: `🔮 Đã ghi nhận. Kết quả sẽ được gửi cho bạn cuối đêm.`, components: [] });
+          await interaction.update({ content: '🔮 Đã ghi nhận. Kết quả sẽ được gửi cuối đêm.', components: [] });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
 
         if (interaction.customId === 'sw_guard_pick') {
+          requireRoleHolder(game, 'BAO_VE', interaction.user.id);
           gameManager.submitGuardTarget(game, interaction.user.id, targetId);
           await interaction.update({ content: '🛡️ Đã ghi nhận lựa chọn bảo vệ.', components: [] });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
@@ -186,6 +277,7 @@ module.exports = {
         }
 
         if (interaction.customId === 'sw_cave_pick') {
+          requireRoleHolder(game, 'CAVE', interaction.user.id);
           gameManager.submitCaveTarget(game, interaction.user.id, targetId);
           await interaction.update({ content: '🕊️ Đã ghi nhận lựa chọn ngủ cùng.', components: [] });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
@@ -194,20 +286,22 @@ module.exports = {
 
         if (interaction.customId === 'sw_wolf_vote') {
           gameManager.submitWolfVote(game, interaction.user.id, targetId);
-          await interaction.update({ content: '🐺 Đã ghi nhận lựa chọn cắn.', components: [] });
+          await interaction.update({ content: flow.buildWolfVoteTallyContent(game), components: interaction.message.components });
           await flow.checkAndPromptWitch(interaction.client, game);
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
 
         if (interaction.customId === 'sw_curse_pick') {
+          requireRoleHolder(game, 'SOI_NGUYEN', interaction.user.id);
           const chosen = interaction.values[0] || null;
           gameManager.submitCurseTarget(game, interaction.user.id, chosen);
-          await interaction.update({ content: chosen ? '☠️ Đã ghi nhận lựa chọn nguyền.' : '☠️ Bạn chọn không nguyền ai đêm nay.', components: [] });
+          await interaction.update({ content: chosen ? '☠️ Đã ghi nhận lựa chọn nguyền.' : '☠️ Không nguyền ai đêm nay.', components: [] });
           return;
         }
 
         if (interaction.customId === 'sw_witch_choice') {
+          requireRoleHolder(game, 'PHU_THUY', interaction.user.id);
           const choice = interaction.values[0];
           if (choice === 'poison') {
             const options = [...game.players.values()]
@@ -220,7 +314,7 @@ module.exports = {
           }
           if (choice === 'heal') {
             const bonusKills = game.wolfCubBonusPending ? 2 : 1;
-            const rawTargets = require('../game/engine').pickTopVoted(game.night.wolfVotes, bonusKills);
+            const rawTargets = engine.pickTopVoted(game.night.wolfVotes, bonusKills);
             gameManager.submitWitchAction(game, interaction.user.id, { type: 'heal', targetId: rawTargets[0] });
           } else {
             gameManager.submitWitchAction(game, interaction.user.id, { type: 'skip' });
@@ -231,6 +325,7 @@ module.exports = {
         }
 
         if (interaction.customId === 'sw_witch_poison_target') {
+          requireRoleHolder(game, 'PHU_THUY', interaction.user.id);
           gameManager.submitWitchAction(game, interaction.user.id, { type: 'poison', targetId });
           await interaction.update({ content: '🧪 Đã ghi nhận quyết định của Phù Thủy.', components: [] });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
@@ -243,8 +338,8 @@ module.exports = {
             target.isAlive = false;
             await interaction.update({ content: `🏹 Bạn đã bắn chết ${flow.nameOf(game, targetId)} trước khi nhắm mắt.`, components: [] });
             await flow.cacheDisplayNames(interaction.client, game);
-            await interaction.channel.send(`🏹 Trước khi chết, Thợ Săn đã bắn theo **${flow.nameOf(game, targetId)}**.`).catch(() => {});
-            const winner = require('../game/engine').checkWinner(game);
+            await interaction.client.channels.fetch(game.channelId).then((ch) => ch.send(`🏹 Trước khi chết, Thợ Săn đã bắn theo **${flow.nameOf(game, targetId)}**.`)).catch(() => {});
+            const winner = engine.checkWinner(game);
             if (winner) await flow.endGame(interaction.client, gameManager, game, winner);
           } else {
             await interaction.update({ content: '⚠️ Mục tiêu không còn hợp lệ.', components: [] });

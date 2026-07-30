@@ -27,12 +27,16 @@ class GameManager {
       players: new Map(), // userId -> { userId, roleId, faction, isAlive, state }
       selectedRoles: null, // null = chua chon, se dung default set
       dayNumber: 0,
-      phase: null, // NIGHT | DAY_ANNOUNCE | DAY_VOTE
+      phase: null, // NIGHT | DAY_DISCUSS | DAY_VOTE
       night: null,
       dayVotes: null,
       cursedUserIds: new Set(),
       wolfCubBonusPending: false,
       wolfCubBonusUsed: false,
+      threads: {}, // roleGroupKey -> threadId (TIEN_TRI, BAO_VE, PHU_THUY, CAVE, WOLVES)
+      panelChannelId: null,
+      panelMessageId: null,
+      startedAt: null,
       createdAt: Date.now(),
     };
     this.games.set(guildId, game);
@@ -124,9 +128,18 @@ class GameManager {
 
     game.status = 'RUNNING';
     game.dayNumber = 1;
+    game.startedAt = Date.now();
     game.phase = 'NIGHT';
     this.beginNightState(game);
     return game;
+  }
+
+  // ---------- Threads ----------
+
+  static threadGroupOf(roleId) {
+    if (roleId === 'SOI_THUONG' || roleId === 'SOI_NGUYEN' || roleId === 'SOI_CON') return 'WOLVES';
+    if (roleId === 'TIEN_TRI' || roleId === 'BAO_VE' || roleId === 'PHU_THUY' || roleId === 'CAVE') return roleId;
+    return null; // DAN_THUONG, THO_SAN, THANG_NGO, BAN_SOI (chua can) - khong co thread rieng
   }
 
   // ---------- Night state ----------
@@ -217,7 +230,7 @@ class GameManager {
   submitDayVote(game, voterId, targetId) {
     const player = game.players.get(voterId);
     if (!player || !player.isAlive) throw new Error('Bạn không thể vote (đã chết hoặc không trong game).');
-    game.dayVotes.set(voterId, targetId);
+    game.dayVotes.set(voterId, targetId === 'NONE' ? null : targetId);
   }
 
   isDayVoteComplete(game) {
