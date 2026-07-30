@@ -23,7 +23,7 @@ Discord bot hỗ trợ chơi Ma Sói (Werewolf) — 3 phe (Dân Làng / Ma Sói 
 5. Vào tab **OAuth2 → URL Generator**:
    - Scopes: tick `bot` và `applications.commands`.
    - Bot Permissions: tick `Send Messages`, `Embed Links`, `Use Slash Commands`, `Manage Messages` (để edit lobby message), `Read Message History`, `Create Private Threads`, `Send Messages in Threads` (bắt buộc — bot dùng thread riêng cho từng vai trò: Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Bầy Sói).
-   - Copy URL ở cuối trang → mở URL này để mời (authorize) bot vào server test của anh.
+   - Copy URL ở cuối trang → mở URL này để mời (authorize) bot vào server test.
 
 ## 3. Cấu hình biến môi trường
 
