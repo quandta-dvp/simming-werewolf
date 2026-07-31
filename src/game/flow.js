@@ -347,17 +347,17 @@ async function checkAndPromptWitch(client, game) {
 
   const bonusKills = game.wolfCubBonusPending ? 2 : 1;
   const rawTargets = engine.pickTopVoted(game.night.wolfVotes, bonusKills);
-  const names = rawTargets.length ? rawTargets.map((id) => nameOf(game, id)).join(', ') : 'không ai';
+  const hasVictim = rawTargets.length > 0;
 
   const options = [];
-  if (!witch.state.healUsed && rawTargets.length === 1) options.push({ label: `Cứu ${names}`, value: 'heal' });
+  if (!witch.state.healUsed && hasVictim && rawTargets.length === 1) options.push({ label: 'Cứu người bị cắn', value: 'heal' });
   if (!witch.state.poisonUsed) options.push({ label: 'Dùng độc giết 1 người khác', value: 'poison' });
   options.push({ label: 'Không làm gì', value: 'skip' });
 
   const menu = new StringSelectMenuBuilder().setCustomId('sw_witch_choice').setPlaceholder('Chọn hành động').addOptions(options);
   try {
     await sendToRoleChannel(client, game, 'PHU_THUY', witch.userId, {
-      content: `🧪 <@${witch.userId}> — **Đêm ${game.dayNumber} — Phù Thủy**\nĐêm nay **${names}** bị Sói cắn. Bạn muốn làm gì?`,
+      content: `🧪 <@${witch.userId}> — **Đêm ${game.dayNumber} — Phù Thủy**\n${hasVictim ? 'Đêm nay **có người bị Sói cắn**.' : 'Đêm nay **không ai bị cắn**.'} Bạn muốn làm gì?`,
       components: [new ActionRowBuilder().addComponents(menu)],
     });
   } catch (err) {
@@ -402,6 +402,7 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
   }
 
   game.phase = 'DAY_DISCUSS';
+  gameManager._persist(game);
   await postOrBumpControlPanel(client, game);
   await channelSend(client, game.channelId, `💬 Mọi người thảo luận. Host bấm **Mở Vote** trên bảng điều khiển khi sẵn sàng.`);
 }
@@ -447,7 +448,11 @@ async function resolveAndAnnounceDayVote(client, gameManager, game) {
   const result = engine.resolveDayVote(game);
 
   if (!result.lynchedUserId) {
-    await channelSend(client, game.channelId, result.tie ? '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.' : '🗳️ Không đủ phiếu / chọn không treo ai — không ai bị treo cổ hôm nay.');
+    let reason;
+    if (result.tie) reason = '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.';
+    else if (result.notEnough) reason = '🗳️ Không ai đạt quá bán số người còn sống — không ai bị treo cổ hôm nay.';
+    else reason = '🗳️ Không có phiếu hợp lệ / mọi người chọn không treo ai — không ai bị treo cổ hôm nay.';
+    await channelSend(client, game.channelId, reason);
   } else {
     await channelSend(client, game.channelId, `⚰️ **${nameOf(game, result.lynchedUserId)}** đã bị dân làng treo cổ.`);
     if (result.extraDeaths && result.extraDeaths.length) {
