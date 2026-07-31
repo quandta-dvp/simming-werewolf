@@ -1,6 +1,6 @@
 const { ROLES, getDefaultRoleSet, FACTION } = require('./constants');
 
-const MIN_PLAYERS = 6;
+const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 20;
 
 /**
