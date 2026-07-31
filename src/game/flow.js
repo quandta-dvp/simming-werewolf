@@ -94,8 +94,7 @@ async function closeAllThreads(game, client) {
   for (const threadId of Object.values(game.threads)) {
     try {
       const thread = await client.channels.fetch(threadId);
-      await thread.setArchived(true, 'Game kết thúc');
-      await thread.setLocked(true).catch(() => {});
+      await thread.delete('Game kết thúc');
     } catch (err) {
       console.error('[closeAllThreads] lỗi:', err.message);
     }
@@ -105,15 +104,31 @@ async function closeAllThreads(game, client) {
 // Gui 1 payload vao thread cua group; fallback DM cho nguoi giu role neu khong co thread
 async function sendToRoleChannel(client, game, groupKey, holderUserId, payload) {
   const threadId = game.threads[groupKey];
+  let msg;
   if (threadId) {
     try {
       const thread = await client.channels.fetch(threadId);
-      return await thread.send(payload);
+      msg = await thread.send(payload);
     } catch (err) {
       console.error(`[sendToRoleChannel] lỗi gửi vào thread ${groupKey}, fallback DM:`, err.message);
     }
   }
-  return dmUser(client, holderUserId, payload);
+  if (!msg) msg = await dmUser(client, holderUserId, payload);
+  if (game.night && msg?.id) game.night.promptMessages.push({ channelId: msg.channelId || game.threads[groupKey], messageId: msg.id });
+  return msg;
+}
+
+// Vo hieu hoa (xoa component) toan bo menu da gui trong dem, tranh nguoi choi bam nham menu cu
+// sau khi da sang dem/ngay khac - day la nguyen nhan gay hien tuong "chon duoc 2 nguoi".
+async function disableNightPrompts(client, game) {
+  if (!game.night || !game.night.promptMessages) return;
+  for (const { channelId, messageId } of game.night.promptMessages) {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      const msg = await channel.messages.fetch(messageId);
+      await msg.edit({ components: [] });
+    } catch { /* tin nhan co the da bi xoa hoac da duoc disable, bo qua */ }
+  }
 }
 
 // ============ CONTROL PANEL ============
@@ -247,7 +262,7 @@ async function sendNightPrompt(client, game, player) {
   if (roleId === 'TIEN_TRI') {
     const options = aliveOptions(game, { excludeUserId: player.userId });
     if (!options.length) return;
-    const menu = new StringSelectMenuBuilder().setCustomId('sw_seer_pick').setPlaceholder('Chọn người để soi').addOptions(options);
+    const menu = new StringSelectMenuBuilder().setCustomId('sw_seer_pick').setPlaceholder('Chọn người để soi').setMinValues(1).setMaxValues(1).addOptions(options);
     await sendToRoleChannel(client, game, group, player.userId, {
       content: `🔮 <@${player.userId}> — **Đêm ${game.dayNumber} — Tiên Tri**\nChọn 1 người để soi phe:`,
       components: [new ActionRowBuilder().addComponents(menu)],
@@ -257,7 +272,7 @@ async function sendNightPrompt(client, game, player) {
 
   if (roleId === 'BAO_VE') {
     const options = aliveOptions(game).concat([{ label: 'Không bảo vệ ai đêm nay', value: 'SKIP' }]);
-    const menu = new StringSelectMenuBuilder().setCustomId('sw_guard_pick').setPlaceholder('Chọn người để bảo vệ').addOptions(options);
+    const menu = new StringSelectMenuBuilder().setCustomId('sw_guard_pick').setPlaceholder('Chọn người để bảo vệ').setMinValues(1).setMaxValues(1).addOptions(options);
     await sendToRoleChannel(client, game, group, player.userId, {
       content: `🛡️ <@${player.userId}> — **Đêm ${game.dayNumber} — Bảo Vệ**\nChọn 1 người để bảo vệ (không trùng người đêm trước):`,
       components: [new ActionRowBuilder().addComponents(menu)],
@@ -267,7 +282,7 @@ async function sendNightPrompt(client, game, player) {
 
   if (roleId === 'CAVE') {
     const options = aliveOptions(game, { excludeUserId: player.userId }).concat([{ label: 'Ngủ một mình', value: 'ALONE' }]);
-    const menu = new StringSelectMenuBuilder().setCustomId('sw_cave_pick').setPlaceholder('Chọn người để ngủ cùng').addOptions(options);
+    const menu = new StringSelectMenuBuilder().setCustomId('sw_cave_pick').setPlaceholder('Chọn người để ngủ cùng').setMinValues(1).setMaxValues(1).addOptions(options);
     await sendToRoleChannel(client, game, group, player.userId, {
       content: `🕊️ <@${player.userId}> — **Đêm ${game.dayNumber} — Cave**\nChọn người để ngủ cùng (không trùng người đêm trước):`,
       components: [new ActionRowBuilder().addComponents(menu)],
@@ -278,7 +293,7 @@ async function sendNightPrompt(client, game, player) {
   if (roleId === 'THO_SAN') {
     const options = aliveOptions(game, { excludeUserId: player.userId });
     if (!options.length) return;
-    const menu = new StringSelectMenuBuilder().setCustomId('sw_hunter_pick').setPlaceholder('Chọn người để nhắm trước').addOptions(options);
+    const menu = new StringSelectMenuBuilder().setCustomId('sw_hunter_pick').setPlaceholder('Chọn người để nhắm trước').setMinValues(1).setMaxValues(1).addOptions(options);
     const current = player.state.hunterTarget ? `\n_Hiện đang nhắm: **${nameOf(game, player.state.hunterTarget)}**_` : '';
     await sendToRoleChannel(client, game, group, player.userId, {
       content: `🏹 <@${player.userId}> — **Đêm ${game.dayNumber} — Thợ Săn**\nChọn trước 1 người — nếu bạn chết (đêm hoặc bị treo), người này sẽ chết theo ngay lập tức:${current}`,
@@ -292,7 +307,7 @@ async function sendNightPrompt(client, game, player) {
     if (!game.night.wolfPromptSent) {
       game.night.wolfPromptSent = true;
       const options = aliveOptions(game, { excludeFaction: FACTION.WOLF });
-      const menu = new StringSelectMenuBuilder().setCustomId('sw_wolf_vote').setPlaceholder('Chọn người để cắn').addOptions(options);
+      const menu = new StringSelectMenuBuilder().setCustomId('sw_wolf_vote').setPlaceholder('Chọn người để cắn').setMinValues(1).setMaxValues(1).addOptions(options);
       const extra = game.wolfCubBonusPending ? '\n🐾 *Sói Con đã hy sinh — đêm nay bầy được cắn 2 người!*' : '';
       await sendToRoleChannel(client, game, 'WOLVES', player.userId, {
         content: `🐺 **Đêm ${game.dayNumber} — Bầy Sói**\nCả bầy cùng chọn 1 người để cắn (ai vote sau sẽ thấy tỉ lệ hiện tại):${extra}`,
@@ -357,6 +372,7 @@ async function maybeFinalizeNight(client, gameManager, game) {
 }
 
 async function resolveAndAnnounceNight(client, gameManager, game) {
+  await disableNightPrompts(client, game);
   const result = engine.resolveNight(game);
 
   const seerHolder = engine.getPlayerByRole(game, 'TIEN_TRI');

@@ -154,7 +154,7 @@ class GameManager {
       witchAction: undefined,
       seerTarget: undefined,
       submittedUserIds: new Set(),
-      dmMessages: new Map(), // userId -> {channel, message} de update tally cho bay Soi
+      promptMessages: [], // [{channelId, messageId}] - tat ca menu da gui dem nay, de vo hieu hoa khi dem ket thuc
     };
   }
 

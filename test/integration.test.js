@@ -7,6 +7,7 @@ function createMockClient() {
   let threadCounter = 0;
   const messagesById = new Map();
   const threadsById = new Map();
+  const deletedThreadIds = new Set();
 
   function makeMessage(channelId, payload) {
     const id = 'msg_' + Math.random().toString(36).slice(2);
@@ -53,8 +54,16 @@ function createMockClient() {
             members: { add: async (userId) => { thread._members.push(userId); } },
             _members: [],
             send: async (payload) => { channelLog.push({ channelId: threadId, payload }); return makeMessage(threadId, payload); },
+            messages: {
+              fetch: async (msgId) => {
+                const msg = messagesById.get(msgId);
+                if (!msg) throw new Error('message not found');
+                return msg;
+              },
+            },
             setArchived: async () => { thread.archived = true; },
             setLocked: async () => { thread.locked = true; },
+            delete: async () => { deletedThreadIds.add(threadId); },
           };
           threadsById.set(threadId, thread);
           return thread;
@@ -78,12 +87,16 @@ function createMockClient() {
       },
     },
   };
-  return { client, dmLog, channelLog, threadsById };
+  return {
+    client, dmLog, channelLog, threadsById, deletedThreadIds, messagesById,
+  };
 }
 
 async function run() {
   const gm = new GameManager();
-  const { client, dmLog, channelLog, threadsById } = createMockClient();
+  const {
+    client, dmLog, channelLog, threadsById, deletedThreadIds, messagesById,
+  } = createMockClient();
 
   const guildId = 'guild1';
   const channelId = 'chan1';
@@ -114,6 +127,7 @@ async function run() {
 
   console.log('\n--- beginNight ---');
   await flow.beginNight(client, gm, game);
+  const night1PromptMessages = [...game.night.promptMessages]; // luu lai truoc khi bi ghi de o dem sau
 
   const findRole = (roleId) => [...game.players.values()].find((p) => p.roleId === roleId);
   const wolves = [...game.players.values()].filter((p) => p.faction === 'wolf');
@@ -139,6 +153,12 @@ async function run() {
   console.log('\nSau đêm 1:');
   console.log('  Người dân được bảo vệ có sống không?', villagerTarget.isAlive === true);
   console.log('  Phase hiện tại:', game.phase, '(kỳ vọng DAY_DISCUSS)');
+  console.log('  Số menu đêm 1 đã gửi:', night1PromptMessages.length);
+  console.log('  TẤT CẢ menu đêm 1 đã bị vô hiệu hóa (components rỗng) sau khi resolve?',
+    night1PromptMessages.every(({ messageId }) => {
+      const msg = messagesById.get(messageId);
+      return msg && msg.components.length === 0;
+    }));
 
   console.log('\n--- Host mở vote ---');
   await flow.openDayVote(client, gm, game);
@@ -157,7 +177,7 @@ async function run() {
   await flow.maybeFinalizeDayVote(client, gm, game);
 
   console.log('Game status:', game.status, '(kỳ vọng ENDED)');
-  console.log('Thread đã archive chưa?', [...threadsById.values()].every((t) => t.archived));
+  console.log('Tất cả thread đã bị XÓA chưa?', Object.values(game.threads).every((tid) => deletedThreadIds.has(tid)));
   console.log('Game còn active trong GameManager?', gm.getGame(guildId) !== null, '(kỳ vọng false)');
 
   console.log('\n=== TEST HOÀN TẤT, KHÔNG CÓ EXCEPTION ===');
