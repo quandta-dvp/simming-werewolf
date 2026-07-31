@@ -3,6 +3,7 @@ const path = require('node:path');
 const { Client, GatewayIntentBits, Collection, Partials } = require('discord.js');
 const config = require('./config');
 const { GameManager } = require('./game/GameManager');
+const { GameStore } = require('./db/GameStore');
 
 const client = new Client({
   intents: [
@@ -14,7 +15,8 @@ const client = new Client({
 });
 
 client.commands = new Collection();
-const gameManager = new GameManager();
+const gameStore = new GameStore();
+const gameManager = new GameManager(gameStore);
 
 // --- Load commands ---
 const commandsPath = path.join(__dirname, 'commands');
