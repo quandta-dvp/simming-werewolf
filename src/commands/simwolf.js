@@ -17,6 +17,7 @@ function replyOrFollowUp(interaction, payload) {
 }
 const { FACTION } = require('../game/constants');
 const config = require('../config');
+const { getPlayerStats, getLeaderboard } = require('../db/gameRepository');
 
 const FACTION_LABEL = {
   [FACTION.WOLF]: '🔴 Phe Ma Sói',
@@ -131,16 +132,52 @@ module.exports = {
 
     if (sub === 'stats') {
       const target = interaction.options.getUser('user') || interaction.user;
-      await replyOrFollowUp(interaction, {
-        content: `📊 Thống kê cho **${target.username}** — tính năng đang được hoàn thiện (cần kết nối Postgres, xem README phần Database).`,
-      });
+      const stats = await getPlayerStats(target.id);
+
+      if (!stats) {
+        await replyOrFollowUp(interaction, {
+          content: `📊 **${target.username}** chưa hoàn thành trận Ma Sói nào.`,
+        });
+        return;
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(`📊 Thống kê — ${target.username}`)
+        .setColor(0x5865f2)
+        .addFields(
+          { name: 'Số trận đã chơi', value: String(stats.games_played), inline: true },
+          { name: 'Số trận thắng', value: String(stats.games_won), inline: true },
+          { name: 'Tỉ lệ thắng', value: `${stats.win_rate ?? 0}%`, inline: true },
+          { name: 'Số trận làm Sói', value: String(stats.games_as_wolf), inline: true },
+          { name: 'Tỉ lệ làm Sói', value: `${stats.wolf_rate ?? 0}%`, inline: true },
+        );
+      await replyOrFollowUp(interaction, { embeds: [embed] });
       return;
     }
 
     if (sub === 'leaderboard') {
-      await replyOrFollowUp(interaction, {
-        content: '🏆 Bảng xếp hạng — tính năng đang được hoàn thiện (cần kết nối Postgres, xem README phần Database).',
-      });
+      const rows = await getLeaderboard(10);
+
+      if (!rows.length) {
+        await replyOrFollowUp(interaction, { content: '🏆 Chưa có trận Ma Sói nào hoàn thành trong server này.' });
+        return;
+      }
+
+      const lines = await Promise.all(rows.map(async (row, i) => {
+        let username = row.user_id;
+        try {
+          const user = await interaction.client.users.fetch(row.user_id);
+          username = user.username;
+        } catch { /* neu khong fetch duoc thi giu userId */ }
+        const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}.`;
+        return `${medal} **${username}** — ${row.games_won} thắng / ${row.games_played} trận (${row.win_rate ?? 0}%)`;
+      }));
+
+      const embed = new EmbedBuilder()
+        .setTitle('🏆 Bảng Xếp Hạng — Simming Werewolf')
+        .setColor(0xffd700)
+        .setDescription(lines.join('\n'));
+      await replyOrFollowUp(interaction, { embeds: [embed] });
       return;
     }
 

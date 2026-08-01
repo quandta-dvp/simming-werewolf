@@ -51,6 +51,7 @@ class GameManager {
       panelMessageId: null,
       startedAt: null,
       createdAt: Date.now(),
+      gameLog: [], // [{ dayNumber, userId, roleId, text }] - tich luy moi dem/ngay, dung cho bang tong ket cuoi game
     };
     this.games.set(guildId, game);
     this._persist(game);

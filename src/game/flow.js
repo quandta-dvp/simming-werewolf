@@ -1,9 +1,11 @@
 const {
-  ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ChannelType,
+  ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ChannelType, AttachmentBuilder,
 } = require('discord.js');
 const { ROLES, FACTION } = require('./constants');
 const { GameManager } = require('./GameManager');
 const engine = require('./engine');
+const { renderGameSummaryImage } = require('../render/summaryImage');
+const { saveFinishedGame } = require('../db/gameRepository');
 
 async function cacheDisplayNames(client, game) {
   game.displayNames = game.displayNames || new Map();
@@ -375,6 +377,11 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
   await disableNightPrompts(client, game);
   const result = engine.resolveNight(game);
 
+  for (const entry of result.log) {
+    const p = game.players.get(entry.userId);
+    game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
+  }
+
   const seerHolder = engine.getPlayerByRole(game, 'TIEN_TRI');
   for (const r of result.seerResults) {
     const text = r.noResult
@@ -447,6 +454,13 @@ async function maybeFinalizeDayVote(client, gameManager, game) {
 async function resolveAndAnnounceDayVote(client, gameManager, game) {
   const result = engine.resolveDayVote(game);
 
+  if (result.log) {
+    for (const entry of result.log) {
+      const p = game.players.get(entry.userId);
+      game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
+    }
+  }
+
   if (!result.lynchedUserId) {
     let reason;
     if (result.tie) reason = '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.';
@@ -486,6 +500,10 @@ async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
     : winnerFaction === FACTION.VILLAGER ? '🟢 PHE DÂN LÀNG'
       : winnerFaction === 'FOOL' ? '🤡 THẰNG NGỐ'
         : String(winnerFaction);
+  const plainLabel = winnerFaction === FACTION.WOLF ? 'PHE MA SÓI'
+    : winnerFaction === FACTION.VILLAGER ? 'PHE DÂN LÀNG'
+      : winnerFaction === 'FOOL' ? 'THẰNG NGỐ'
+        : String(winnerFaction);
 
   const roster = [...game.players.values()]
     .map((p) => `${p.isAlive ? '🟢' : '💀'} **${nameOf(game, p.userId)}** — ${ROLES[p.roleId].emoji} ${ROLES[p.roleId].name}`)
@@ -497,7 +515,20 @@ async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
     .setColor(0xffd700);
 
   await channelSend(client, game.channelId, { embeds: [embed] });
+
+  // bang tong ket dang anh (nguoi choi x ngay) - chi hien 1 lan luc ket thuc, khong luu lai de xem sau
+  try {
+    const buffer = renderGameSummaryImage(game, game.displayNames, plainLabel);
+    const attachment = new AttachmentBuilder(buffer, { name: 'ket-qua-tran.png' });
+    await channelSend(client, game.channelId, { files: [attachment] });
+  } catch (err) {
+    console.error('[endGame] Lỗi render bảng tổng kết ảnh:', err.message);
+  }
+
   await channelSend(client, game.channelId, '_(Người chơi đã chết có thể chat lại bình thường ngay bây giờ.)_');
+
+  // luu ket qua tran vao Postgres cho /simwolf stats va /simwolf leaderboard (fire-and-forget, khong chan flow)
+  saveFinishedGame(game, winnerFaction).catch((err) => console.error('[endGame] Lỗi lưu kết quả trận:', err.message));
 
   await closeAllThreads(game, client);
   gameManager.cancelGame(game.guildId);

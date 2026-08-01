@@ -47,6 +47,7 @@ class GameStore {
       panelMessageId: game.panelMessageId,
       startedAt: game.startedAt,
       createdAt: game.createdAt,
+      gameLog: game.gameLog || [],
     };
   }
 
@@ -74,6 +75,7 @@ class GameStore {
       panelMessageId: data.panelMessageId ?? null,
       startedAt: data.startedAt ?? null,
       createdAt: data.createdAt ?? Date.now(),
+      gameLog: data.gameLog || [],
     };
   }
 
