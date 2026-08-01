@@ -4,7 +4,7 @@ const {
 const { ROLES, FACTION } = require('./constants');
 const { GameManager } = require('./GameManager');
 const engine = require('./engine');
-const { renderGameSummaryImage } = require('../render/summaryImage');
+const { renderGameSummaryExcel } = require('../render/summaryExcel');
 const { saveFinishedGame } = require('../db/gameRepository');
 
 async function cacheDisplayNames(client, game) {
@@ -516,13 +516,13 @@ async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
 
   await channelSend(client, game.channelId, { embeds: [embed] });
 
-  // bang tong ket dang anh (nguoi choi x ngay) - chi hien 1 lan luc ket thuc, khong luu lai de xem sau
+  // bang tong ket dang file Excel (nguoi choi x ngay) - chi gui 1 lan luc ket thuc, khong luu lai de xem sau
   try {
-    const buffer = renderGameSummaryImage(game, game.displayNames, plainLabel);
-    const attachment = new AttachmentBuilder(buffer, { name: 'ket-qua-tran.png' });
+    const buffer = await renderGameSummaryExcel(game, game.displayNames, plainLabel);
+    const attachment = new AttachmentBuilder(buffer, { name: 'ket-qua-tran.xlsx' });
     await channelSend(client, game.channelId, { files: [attachment] });
   } catch (err) {
-    console.error('[endGame] Lỗi render bảng tổng kết ảnh:', err.message);
+    console.error('[endGame] Lỗi tạo file Excel tổng kết:', err.message);
   }
 
   await channelSend(client, game.channelId, '_(Người chơi đã chết có thể chat lại bình thường ngay bây giờ.)_');
