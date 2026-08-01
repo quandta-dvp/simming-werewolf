@@ -1,8 +1,6 @@
 # Simming Werewolf 🐺
 
-Discord bot hỗ trợ chơi Ma Sói (Werewolf) — 3 phe (Dân Làng / Ma Sói / Thứ 3), phase Đêm/Ngày, host tự chọn role, random role mỗi ván, `/simwolf help` và `/simwolf leaderboard`.
-
-> **Trạng thái hiện tại:** đây là bản scaffold ban đầu — bot đã connect được, có lobby (`/simwolf create` + tham gia/rời/chọn vai/bắt đầu), random role. Phần logic đêm/ngày chi tiết (night action, vote, tính thắng thua, log cuối ván) sẽ được bổ sung ở các bước tiếp theo.
+Discord bot hỗ trợ chơi Ma Sói (Werewolf) — 3 phe (Dân Làng / Ma Sói / Thứ 3), phase Đêm/Ngày, host tự chọn role, random role mỗi ván.
 
 ---
 
@@ -81,26 +79,8 @@ npm start
 2. Gõ `/simwolf create` trong 1 kênh text → bot hiện lobby với các nút Tham Gia / Rời Phòng / Xem Vai Trò / Chọn Vai / Bắt Đầu Game / Trạng Thái / Hủy Phòng.
 3. Đủ 6 người trở lên → host bấm **Bắt Đầu Game** để random role (phần gửi DM + xử lý đêm/ngày sẽ hoàn thiện ở bản tiếp theo).
 
-## 7. Cấu trúc thư mục
 
-```
-src/
-  index.js              # entry point, load command + event
-  config.js              # đọc biến môi trường
-  deploy-commands.js     # script đăng ký slash command lên Discord
-  commands/
-    simwolf.js            # /simwolf create|help|stats|leaderboard|reload
-  events/
-    ready.js
-    interactionCreate.js  # xử lý slash command, button, select menu
-  game/
-    constants.js          # danh sách role, tỉ lệ Sói mặc định theo số người
-    GameManager.js         # quản lý state lobby/game trong bộ nhớ
-  db/
-    schema.sql             # schema Postgres cho scoreboard
-```
-
-## 8. Roadmap tiếp theo
+## 7. Roadmap tiếp theo
 
 - [x] Random vai trò + nút "Xem Vai Trò Của Bạn" (ephemeral, host thấy full, người chơi chỉ thấy vai của mình)
 - [x] Thread riêng theo từng vai trò có chức năng (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Bầy Sói) — Host được thêm vào tất cả để theo dõi, không thao tác được
@@ -118,18 +98,3 @@ src/
 
 ---
 
-## 9. Đưa code lên GitHub repo riêng
-
-Repo này hiện đang ở dạng file scaffold, chưa được push lên GitHub. Để tạo repo và đẩy code lên:
-
-```bash
-cd simming-werewolf
-git init
-git add .
-git commit -m "chore: scaffold Simming Werewolf bot"
-git branch -M main
-git remote add origin https://github.com/<username>/simming-werewolf.git
-git push -u origin main
-```
-
-(Tạo repo trống trên GitHub trước ở https://github.com/new, đặt tên `simming-werewolf`, **không** tick "Initialize with README" để tránh conflict khi push.)
