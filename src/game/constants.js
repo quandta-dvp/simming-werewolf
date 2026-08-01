@@ -22,7 +22,7 @@ const ROLES = {
     emoji: '🔮',
     faction: FACTION.VILLAGER,
     hasNightAction: true,
-    description: 'Mỗi đêm soi 1 người, biết họ có phải Sói hay không.',
+    description: 'Mỗi đêm soi 1 người, biết họ có phải Sói hay không (kết quả gửi cuối đêm). Nếu bị Cave ngủ cùng, luôn tri ra "không phải Sói".',
     isDefaultCandidate: true,
   },
   BAO_VE: {

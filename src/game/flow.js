@@ -375,11 +375,9 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
   await disableNightPrompts(client, game);
   const result = engine.resolveNight(game);
 
-  const seerHolder = engine.getPlayerByRole(game, 'TIEN_TRI');
+  const seerHolder = engine.getPlayerByRoleAny(game, 'TIEN_TRI');
   for (const r of result.seerResults) {
-    const text = r.noResult
-      ? 'Bạn cảm thấy mơ màng đêm nay, không có kết quả soi.'
-      : `Kết quả soi: **${nameOf(game, r.userId)}** ${r.isWolf ? '**LÀ** phe Sói.' : '**KHÔNG PHẢI** phe Sói.'}`;
+    const text = `Kết quả soi: **${nameOf(game, r.userId)}** ${r.isWolf ? '**LÀ** phe Sói.' : '**KHÔNG PHẢI** phe Sói.'}`;
     if (seerHolder) {
       sendToRoleChannel(client, game, 'TIEN_TRI', seerHolder.userId, { content: `🔮 ${text}` }).catch(() => {});
     }

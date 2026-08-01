@@ -7,6 +7,15 @@ function getPlayerByRole(game, roleId) {
   return null;
 }
 
+// Khong loc theo con song - dung khi can biet AI GIU role nay de gui thong tin/log,
+// ke ca ho da chet trong chinh dem do (vd Tien Tri chet cung dem van phai nhan duoc ket qua soi).
+function getPlayerByRoleAny(game, roleId) {
+  for (const p of game.players.values()) {
+    if (p.roleId === roleId) return p;
+  }
+  return null;
+}
+
 function aliveWolfCount(game) {
   return [...game.players.values()].filter((p) => p.isAlive && p.faction === FACTION.WOLF).length;
 }
@@ -140,19 +149,22 @@ function resolveNight(game) {
 
   // --- Seer ---
   const seerResults = [];
-  if (night.seerTarget && !seerNullified) {
-    const target = game.players.get(night.seerTarget);
-    let appearsWolf;
-    if (target.roleId === 'BAN_SOI' && target.faction !== FACTION.WOLF) {
-      appearsWolf = false;
-    } else if (game.cursedUserIds && game.cursedUserIds.has(night.seerTarget)) {
-      appearsWolf = true;
+  if (night.seerTarget) {
+    if (seerNullified) {
+      // Bi Cave ngu cung -> luon tri ra la Dan (khong phai Soi), khong con "mat ket qua"
+      seerResults.push({ userId: night.seerTarget, isWolf: false });
     } else {
-      appearsWolf = target.faction === FACTION.WOLF || target.faction === FACTION.THIRD_PARTY;
+      const target = game.players.get(night.seerTarget);
+      let appearsWolf;
+      if (target.roleId === 'BAN_SOI' && target.faction !== FACTION.WOLF) {
+        appearsWolf = false;
+      } else if (game.cursedUserIds && game.cursedUserIds.has(night.seerTarget)) {
+        appearsWolf = true;
+      } else {
+        appearsWolf = target.faction === FACTION.WOLF || target.faction === FACTION.THIRD_PARTY;
+      }
+      seerResults.push({ userId: night.seerTarget, isWolf: appearsWolf });
     }
-    seerResults.push({ userId: night.seerTarget, isWolf: appearsWolf });
-  } else if (night.seerTarget && seerNullified) {
-    seerResults.push({ userId: night.seerTarget, noResult: true });
   }
 
   return {
@@ -196,6 +208,7 @@ function resolveDayVote(game) {
 
 module.exports = {
   getPlayerByRole,
+  getPlayerByRoleAny,
   aliveWolfCount,
   aliveNonWolfCount,
   checkWinner,
