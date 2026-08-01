@@ -1,9 +1,11 @@
 const {
-  ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ChannelType,
+  ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ChannelType, AttachmentBuilder,
 } = require('discord.js');
 const { ROLES, FACTION } = require('./constants');
 const { GameManager } = require('./GameManager');
 const engine = require('./engine');
+const { renderGameSummaryExcel } = require('../render/summaryExcel');
+const { saveFinishedGame } = require('../db/gameRepository');
 
 async function cacheDisplayNames(client, game) {
   game.displayNames = game.displayNames || new Map();
@@ -347,17 +349,17 @@ async function checkAndPromptWitch(client, game) {
 
   const bonusKills = game.wolfCubBonusPending ? 2 : 1;
   const rawTargets = engine.pickTopVoted(game.night.wolfVotes, bonusKills);
-  const names = rawTargets.length ? rawTargets.map((id) => nameOf(game, id)).join(', ') : 'không ai';
+  const hasVictim = rawTargets.length > 0;
 
   const options = [];
-  if (!witch.state.healUsed && rawTargets.length === 1) options.push({ label: `Cứu ${names}`, value: 'heal' });
+  if (!witch.state.healUsed && hasVictim && rawTargets.length === 1) options.push({ label: 'Cứu người bị cắn', value: 'heal' });
   if (!witch.state.poisonUsed) options.push({ label: 'Dùng độc giết 1 người khác', value: 'poison' });
   options.push({ label: 'Không làm gì', value: 'skip' });
 
   const menu = new StringSelectMenuBuilder().setCustomId('sw_witch_choice').setPlaceholder('Chọn hành động').addOptions(options);
   try {
     await sendToRoleChannel(client, game, 'PHU_THUY', witch.userId, {
-      content: `🧪 <@${witch.userId}> — **Đêm ${game.dayNumber} — Phù Thủy**\nĐêm nay **${names}** bị Sói cắn. Bạn muốn làm gì?`,
+      content: `🧪 <@${witch.userId}> — **Đêm ${game.dayNumber} — Phù Thủy**\n${hasVictim ? 'Đêm nay **có người bị Sói cắn**.' : 'Đêm nay **không ai bị cắn**.'} Bạn muốn làm gì?`,
       components: [new ActionRowBuilder().addComponents(menu)],
     });
   } catch (err) {
@@ -371,9 +373,81 @@ async function maybeFinalizeNight(client, gameManager, game) {
   await resolveAndAnnounceNight(client, gameManager, game);
 }
 
+// Ghi lai LUA CHON cua tung nguoi co hanh dong dem nay (khong phai ket qua resolve),
+// vd Bao Ve chon bao ve ai, Soi vote can ai (du khong trung), Tien Tri soi ai...
+// Phai goi TRUOC engine.resolveNight vi sau do game.night se bi doc/xoa mot phan.
+function logNightActions(game) {
+  const night = game.night;
+  if (!night) return;
+
+  // Bay Soi: moi Soi vote rieng, log rieng tung nguoi (kha nang wolfVotes co nhieu Soi)
+  for (const [wolfUserId, targetId] of night.wolfVotes.entries()) {
+    const p = game.players.get(wolfUserId);
+    game.gameLog.push({
+      dayNumber: game.dayNumber, userId: wolfUserId, roleId: p ? p.roleId : null,
+      text: `chọn cắn ${nameOf(game, targetId)}`,
+    });
+  }
+
+  const guardHolder = engine.getPlayerByRole(game, 'BAO_VE');
+  if (guardHolder && night.guardTarget !== undefined) {
+    game.gameLog.push({
+      dayNumber: game.dayNumber, userId: guardHolder.userId, roleId: 'BAO_VE',
+      text: night.guardTarget ? `chọn bảo vệ ${nameOf(game, night.guardTarget)}` : 'không bảo vệ ai',
+    });
+  }
+
+  const caveHolder = engine.getPlayerByRole(game, 'CAVE');
+  if (caveHolder && night.caveTarget !== undefined) {
+    game.gameLog.push({
+      dayNumber: game.dayNumber, userId: caveHolder.userId, roleId: 'CAVE',
+      text: night.caveTarget === 'ALONE' ? 'ngủ một mình' : `chọn ngủ cùng ${nameOf(game, night.caveTarget)}`,
+    });
+  }
+
+  const seerHolder = engine.getPlayerByRole(game, 'TIEN_TRI');
+  if (seerHolder && night.seerTarget) {
+    game.gameLog.push({
+      dayNumber: game.dayNumber, userId: seerHolder.userId, roleId: 'TIEN_TRI',
+      text: `chọn soi ${nameOf(game, night.seerTarget)}`,
+    });
+  }
+
+  const witchHolder = engine.getPlayerByRole(game, 'PHU_THUY');
+  if (witchHolder && night.witchAction) {
+    const wa = night.witchAction;
+    const text = wa.type === 'heal' ? 'chọn cứu người bị cắn'
+      : wa.type === 'poison' ? `chọn đầu độc ${nameOf(game, wa.targetId)}`
+        : 'không dùng bình nào';
+    game.gameLog.push({ dayNumber: game.dayNumber, userId: witchHolder.userId, roleId: 'PHU_THUY', text });
+  }
+
+  const wolfCurseHolder = engine.getPlayerByRole(game, 'SOI_NGUYEN');
+  if (wolfCurseHolder && night.curseTarget) {
+    game.gameLog.push({
+      dayNumber: game.dayNumber, userId: wolfCurseHolder.userId, roleId: 'SOI_NGUYEN',
+      text: `chọn nguyền ${nameOf(game, night.curseTarget)}`,
+    });
+  }
+
+  const hunterHolder = engine.getPlayerByRole(game, 'THO_SAN');
+  if (hunterHolder && hunterHolder.state.hunterTarget && night.submittedUserIds.has(hunterHolder.userId)) {
+    game.gameLog.push({
+      dayNumber: game.dayNumber, userId: hunterHolder.userId, roleId: 'THO_SAN',
+      text: `chọn trước mục tiêu ${nameOf(game, hunterHolder.state.hunterTarget)} (nếu Thợ Săn chết)`,
+    });
+  }
+}
+
 async function resolveAndAnnounceNight(client, gameManager, game) {
   await disableNightPrompts(client, game);
+  logNightActions(game);
   const result = engine.resolveNight(game);
+
+  for (const entry of result.log) {
+    const p = game.players.get(entry.userId);
+    game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
+  }
 
   const seerHolder = engine.getPlayerByRoleAny(game, 'TIEN_TRI');
   for (const r of result.seerResults) {
@@ -400,6 +474,7 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
   }
 
   game.phase = 'DAY_DISCUSS';
+  gameManager._persist(game);
   await postOrBumpControlPanel(client, game);
   await channelSend(client, game.channelId, `💬 Mọi người thảo luận. Host bấm **Mở Vote** trên bảng điều khiển khi sẵn sàng.`);
 }
@@ -444,8 +519,19 @@ async function maybeFinalizeDayVote(client, gameManager, game) {
 async function resolveAndAnnounceDayVote(client, gameManager, game) {
   const result = engine.resolveDayVote(game);
 
+  if (result.log) {
+    for (const entry of result.log) {
+      const p = game.players.get(entry.userId);
+      game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
+    }
+  }
+
   if (!result.lynchedUserId) {
-    await channelSend(client, game.channelId, result.tie ? '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.' : '🗳️ Không đủ phiếu / chọn không treo ai — không ai bị treo cổ hôm nay.');
+    let reason;
+    if (result.tie) reason = '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.';
+    else if (result.notEnough) reason = '🗳️ Không ai đạt quá bán số người còn sống — không ai bị treo cổ hôm nay.';
+    else reason = '🗳️ Không có phiếu hợp lệ / mọi người chọn không treo ai — không ai bị treo cổ hôm nay.';
+    await channelSend(client, game.channelId, reason);
   } else {
     await channelSend(client, game.channelId, `⚰️ **${nameOf(game, result.lynchedUserId)}** đã bị dân làng treo cổ.`);
     if (result.extraDeaths && result.extraDeaths.length) {
@@ -479,6 +565,10 @@ async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
     : winnerFaction === FACTION.VILLAGER ? '🟢 PHE DÂN LÀNG'
       : winnerFaction === 'FOOL' ? '🤡 THẰNG NGỐ'
         : String(winnerFaction);
+  const plainLabel = winnerFaction === FACTION.WOLF ? 'PHE MA SÓI'
+    : winnerFaction === FACTION.VILLAGER ? 'PHE DÂN LÀNG'
+      : winnerFaction === 'FOOL' ? 'THẰNG NGỐ'
+        : String(winnerFaction);
 
   const roster = [...game.players.values()]
     .map((p) => `${p.isAlive ? '🟢' : '💀'} **${nameOf(game, p.userId)}** — ${ROLES[p.roleId].emoji} ${ROLES[p.roleId].name}`)
@@ -490,7 +580,20 @@ async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
     .setColor(0xffd700);
 
   await channelSend(client, game.channelId, { embeds: [embed] });
+
+  // bang tong ket dang file Excel (nguoi choi x ngay) - chi gui 1 lan luc ket thuc, khong luu lai de xem sau
+  try {
+    const buffer = await renderGameSummaryExcel(game, game.displayNames, plainLabel);
+    const attachment = new AttachmentBuilder(buffer, { name: 'ket-qua-tran.xlsx' });
+    await channelSend(client, game.channelId, { files: [attachment] });
+  } catch (err) {
+    console.error('[endGame] Lỗi tạo file Excel tổng kết:', err.message);
+  }
+
   await channelSend(client, game.channelId, '_(Người chơi đã chết có thể chat lại bình thường ngay bây giờ.)_');
+
+  // luu ket qua tran vao Postgres cho /simwolf stats va /simwolf leaderboard (fire-and-forget, khong chan flow)
+  saveFinishedGame(game, winnerFaction).catch((err) => console.error('[endGame] Lỗi lưu kết quả trận:', err.message));
 
   await closeAllThreads(game, client);
   gameManager.cancelGame(game.guildId);
@@ -519,4 +622,5 @@ module.exports = {
   endGame,
   nameOf,
   cacheDisplayNames,
+  logNightActions,
 };

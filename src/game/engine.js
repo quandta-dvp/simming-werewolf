@@ -180,17 +180,23 @@ function resolveDayVote(game) {
   const votes = game.dayVotes || new Map();
   const top = pickTopVoted(votes, 1);
   if (top.length === 0) return { lynchedUserId: null };
-  // kiem tra hoa phieu -> khong treo ai
   const tally = new Map();
   for (const target of votes.values()) {
     if (!target) continue;
     tally.set(target, (tally.get(target) || 0) + 1);
   }
   const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+  // hoa phieu giua top 1 va top 2 -> khong treo ai
   if (sorted.length > 1 && sorted[0][1] === sorted[1][1]) {
     return { lynchedUserId: null, tie: true };
   }
-  const lynchedUserId = sorted[0][0];
+  // phai dat qua ban (>50%) so nguoi CON SONG, khong chi la nhieu phieu nhat
+  const aliveCount = [...game.players.values()].filter((p) => p.isAlive).length;
+  const [topTargetId, topVoteCount] = sorted[0];
+  if (topVoteCount <= aliveCount / 2) {
+    return { lynchedUserId: null, notEnough: true };
+  }
+  const lynchedUserId = topTargetId;
   const player = game.players.get(lynchedUserId);
   player.isAlive = false;
   const log = [{ userId: lynchedUserId, text: 'bị dân làng treo cổ' }];

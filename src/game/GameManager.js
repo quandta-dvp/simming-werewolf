@@ -8,11 +8,24 @@ const MAX_PLAYERS = 20;
  * Day la state trong bo nho cho ban scaffold - se sync xuong Postgres o buoc sau.
  */
 class GameManager {
-  constructor() {
+  /**
+   * @param {import('../db/GameStore').GameStore} [store] - optional, neu khong
+   * truyen vao thi GameManager van chay binh thuong tren RAM (khong persist).
+   */
+  constructor(store = null) {
     /** @type {Map<string, Game>} */
     this.games = new Map();
     /** userId -> guildId, de tra cuu game tu tin nhan DM (DM khong co guildId) */
     this.playerGuildMap = new Map();
+    this.store = store;
+  }
+
+  /**
+   * Fire-and-forget: khong await, khong de loi luu DB lam gian doan game dang choi.
+   * Goi sau moi lan mutate state quan trong.
+   */
+  _persist(game) {
+    if (this.store && game) this.store.save(game).catch(() => {}); // GameStore.save da tu catch, day la lop bao ve kep
   }
 
   createGame(guildId, channelId, hostId) {
@@ -38,8 +51,10 @@ class GameManager {
       panelMessageId: null,
       startedAt: null,
       createdAt: Date.now(),
+      gameLog: [], // [{ dayNumber, userId, roleId, text }] - tich luy moi dem/ngay, dung cho bang tong ket cuoi game
     };
     this.games.set(guildId, game);
+    this._persist(game);
     return game;
   }
 
@@ -58,6 +73,7 @@ class GameManager {
       for (const userId of game.players.keys()) this.playerGuildMap.delete(userId);
     }
     this.games.delete(guildId);
+    if (this.store) this.store.delete(guildId).catch(() => {});
   }
 
   join(guildId, userId) {
@@ -67,6 +83,7 @@ class GameManager {
     if (game.players.size >= MAX_PLAYERS) throw new Error(`Phòng đã đủ tối đa ${MAX_PLAYERS} người.`);
     if (game.players.has(userId)) throw new Error('Bạn đã ở trong phòng rồi.');
     game.players.set(userId, { userId, roleId: null, faction: null, isAlive: true, state: {} });
+    this._persist(game);
     return game;
   }
 
@@ -75,6 +92,7 @@ class GameManager {
     if (!game) throw new Error('Không có phòng nào đang mở.');
     if (game.status !== 'LOBBY') throw new Error('Game đã bắt đầu, không thể rời phòng.');
     game.players.delete(userId);
+    this._persist(game);
     return game;
   }
 
@@ -83,6 +101,7 @@ class GameManager {
     if (!game) throw new Error('Không có phòng nào đang mở.');
     if (game.hostId !== hostId) throw new Error('Chỉ host mới được chọn vai.');
     game.selectedRoles = roleIds;
+    this._persist(game);
     return game;
   }
 
@@ -131,6 +150,7 @@ class GameManager {
     game.startedAt = Date.now();
     game.phase = 'NIGHT';
     this.beginNightState(game);
+    this._persist(game);
     return game;
   }
 
@@ -156,6 +176,7 @@ class GameManager {
       submittedUserIds: new Set(),
       promptMessages: [], // [{channelId, messageId}] - tat ca menu da gui dem nay, de vo hieu hoa khi dem ket thuc
     };
+    this._persist(game);
   }
 
   getAlivePlayers(game) {
@@ -179,10 +200,12 @@ class GameManager {
     if (targetPlayer.faction === FACTION.WOLF) throw new Error('Không thể cắn đồng đội Sói.');
     game.night.wolfVotes.set(userId, targetId);
     game.night.submittedUserIds.add(userId);
+    this._persist(game);
   }
 
   submitCurseTarget(game, userId, targetId) {
     game.night.curseTarget = targetId; // optional, khong bat buoc de hoan tat dem
+    this._persist(game);
   }
 
   submitGuardTarget(game, userId, targetId) {
@@ -193,16 +216,21 @@ class GameManager {
     game.night.guardTarget = targetId === 'SKIP' ? null : targetId;
     player.state.lastGuardTarget = game.night.guardTarget;
     game.night.submittedUserIds.add(userId);
+    this._persist(game);
   }
 
   submitCaveTarget(game, userId, targetId) {
     const player = game.players.get(userId);
+    if (game.night.submittedUserIds.has(userId)) {
+      throw new Error('Bạn đã chọn ngủ cùng ai đêm nay rồi, không thể đổi.');
+    }
     if (targetId !== 'ALONE' && player.state.lastCaveTarget === targetId) {
       throw new Error('Không được ngủ với cùng 1 người 2 đêm liên tiếp.');
     }
     game.night.caveTarget = targetId;
     player.state.lastCaveTarget = targetId;
     game.night.submittedUserIds.add(userId);
+    this._persist(game);
   }
 
   submitWitchAction(game, userId, action) {
@@ -213,17 +241,20 @@ class GameManager {
     if (action.type === 'poison') player.state.poisonUsed = true;
     game.night.witchAction = action;
     game.night.submittedUserIds.add(userId);
+    this._persist(game);
   }
 
   submitSeerTarget(game, userId, targetId) {
     game.night.seerTarget = targetId;
     game.night.submittedUserIds.add(userId);
+    this._persist(game);
   }
 
   submitHunterTarget(game, userId, targetId) {
     const player = game.players.get(userId);
     player.state.hunterTarget = targetId; // luon ghi de - dung lua chon gan nhat neu Tho San chet
     game.night.submittedUserIds.add(userId);
+    this._persist(game);
   }
 
   // ---------- Day vote ----------
@@ -231,12 +262,14 @@ class GameManager {
   beginDayVote(game) {
     game.phase = 'DAY_VOTE';
     game.dayVotes = new Map();
+    this._persist(game);
   }
 
   submitDayVote(game, voterId, targetId) {
     const player = game.players.get(voterId);
     if (!player || !player.isAlive) throw new Error('Bạn không thể vote (đã chết hoặc không trong game).');
     game.dayVotes.set(voterId, targetId === 'NONE' ? null : targetId);
+    this._persist(game);
   }
 
   isDayVoteComplete(game) {
