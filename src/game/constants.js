@@ -94,6 +94,14 @@ const ROLES = {
     hasNightAction: false,
     description: 'Là Dân 100% (kể cả khi bị Tiên Tri soi) cho tới khi bị Sói cắn trúng — khi đó không chết mà chuyển hẳn sang phe Sói.',
   },
+  CUPID: {
+    id: 'CUPID',
+    name: 'Cupid',
+    emoji: '💘',
+    faction: FACTION.VILLAGER,
+    hasNightAction: true,
+    description: 'Chỉ đêm đầu tiên: chọn 2 người ghép thành 1 cặp đôi. Nếu 1 người trong cặp chết (bất kỳ cách nào), người còn lại chết theo ngay vì đau lòng. Nếu 2 người khác phe sống sót đến khi chỉ còn lại đúng 2 người, họ thắng riêng. Nếu bị Cave ngủ cùng đúng đêm đầu tiên, đêm đó không ghép được cặp nào.',
+  },
   THANG_NGO: {
     id: 'THANG_NGO',
     name: 'Thằng Ngố',

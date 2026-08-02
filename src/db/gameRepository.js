@@ -12,7 +12,7 @@ const { pool } = require('./pool');
  * van phai gui cho nguoi choi du DB co loi hay khong).
  *
  * @param {object} game - object game (da co history day/night qua game.gameLog)
- * @param {string} winnerFaction - 'villager' | 'wolf' | 'FOOL'
+ * @param {string} winnerFaction - 'villager' | 'wolf' | 'FOOL' | 'LOVERS'
  * @returns {Promise<number|null>} id cua row trong bang games, hoac null neu khong luu duoc
  */
 async function saveFinishedGame(game, winnerFaction) {
@@ -26,7 +26,8 @@ async function saveFinishedGame(game, winnerFaction) {
     await client.query('BEGIN');
 
     const players = [...game.players.values()];
-    const winningFactionDb = winnerFaction === 'FOOL' ? 'third_party' : winnerFaction; // FOOL la mot nhanh cua third_party trong DB
+    // FOOL va LOVERS la 2 nhanh rieng cua third_party trong DB (winning_faction chi co 3 gia tri: villager/wolf/third_party)
+    const winningFactionDb = (winnerFaction === 'FOOL' || winnerFaction === 'LOVERS') ? 'third_party' : winnerFaction;
 
     const gameRes = await client.query(
       `INSERT INTO games (guild_id, channel_id, host_id, player_count, day_count, winning_faction, ended_reason, started_at, ended_at)
@@ -39,7 +40,7 @@ async function saveFinishedGame(game, winnerFaction) {
         players.length,
         game.dayNumber,
         winningFactionDb,
-        winnerFaction === 'FOOL' ? 'fool_win' : 'faction_win',
+        winnerFaction === 'FOOL' ? 'fool_win' : winnerFaction === 'LOVERS' ? 'lovers_win' : 'faction_win',
         game.startedAt || game.createdAt,
       ]
     );
@@ -47,7 +48,9 @@ async function saveFinishedGame(game, winnerFaction) {
 
     for (const p of players) {
       // "thang" duoc tinh theo phe (hoac Thang Ngo tu treo co thang rieng le)
-      const won = winnerFaction === 'FOOL' ? p.roleId === 'THANG_NGO' : p.faction === winnerFaction;
+      const won = winnerFaction === 'FOOL' ? p.roleId === 'THANG_NGO'
+        : winnerFaction === 'LOVERS' ? !!(game.couple && game.couple.includes(p.userId))
+          : p.faction === winnerFaction;
       await client.query(
         `INSERT INTO game_players (game_id, user_id, role_id, faction, survived, won)
          VALUES ($1, $2, $3, $4, $5, $6)

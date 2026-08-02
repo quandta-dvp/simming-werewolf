@@ -44,6 +44,7 @@ class GameManager {
       night: null,
       dayVotes: null,
       cursedUserIds: new Set(),
+      couple: null, // [userIdA, userIdB] do Cupid ghep dem 1, hoac null neu chua/khong ghep
       wolfCubBonusPending: false,
       wolfCubBonusUsed: false,
       threads: {}, // roleGroupKey -> threadId (TIEN_TRI, BAO_VE, PHU_THUY, CAVE, WOLVES)
@@ -158,7 +159,7 @@ class GameManager {
 
   static threadGroupOf(roleId) {
     if (roleId === 'SOI_THUONG' || roleId === 'SOI_NGUYEN' || roleId === 'SOI_CON') return 'WOLVES';
-    if (roleId === 'TIEN_TRI' || roleId === 'BAO_VE' || roleId === 'PHU_THUY' || roleId === 'CAVE' || roleId === 'THO_SAN') return roleId;
+    if (roleId === 'TIEN_TRI' || roleId === 'BAO_VE' || roleId === 'PHU_THUY' || roleId === 'CAVE' || roleId === 'THO_SAN' || roleId === 'CUPID') return roleId;
     return null; // DAN_THUONG, THANG_NGO, BAN_SOI (chua can) - khong co thread rieng
   }
 
@@ -173,6 +174,7 @@ class GameManager {
       caveTarget: undefined,
       witchAction: undefined,
       seerTarget: undefined,
+      cupidTargets: undefined,
       submittedUserIds: new Set(),
       promptMessages: [], // [{channelId, messageId}] - tat ca menu da gui dem nay, de vo hieu hoa khi dem ket thuc
     };
@@ -184,7 +186,11 @@ class GameManager {
   }
 
   getNightActors(game) {
-    return this.getAlivePlayers(game).filter((p) => ROLES[p.roleId].hasNightAction);
+    return this.getAlivePlayers(game).filter((p) => {
+      if (!ROLES[p.roleId].hasNightAction) return false;
+      if (p.roleId === 'CUPID') return game.dayNumber === 1; // Cupid chi hanh dong dem dau tien
+      return true;
+    });
   }
 
   isNightComplete(game) {
@@ -246,6 +252,18 @@ class GameManager {
 
   submitSeerTarget(game, userId, targetId) {
     game.night.seerTarget = targetId;
+    game.night.submittedUserIds.add(userId);
+    this._persist(game);
+  }
+
+  submitCupidTargets(game, userId, targetIds) {
+    if (!Array.isArray(targetIds) || targetIds.length !== 2) {
+      throw new Error('Cupid phải chọn đúng 2 người để ghép cặp.');
+    }
+    if (targetIds[0] === targetIds[1]) {
+      throw new Error('Không thể ghép 1 người với chính họ.');
+    }
+    game.night.cupidTargets = targetIds;
     game.night.submittedUserIds.add(userId);
     this._persist(game);
   }

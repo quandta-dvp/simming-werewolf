@@ -330,6 +330,15 @@ module.exports = {
           return;
         }
 
+        if (interaction.customId === 'sw_cupid_pick') {
+          requireRoleHolder(game, 'CUPID', interaction.user.id);
+          const targets = interaction.values;
+          gameManager.submitCupidTargets(game, interaction.user.id, targets);
+          await interaction.update({ content: `💘 Đã ghép cặp: **${flow.nameOf(game, targets[0])}** 💞 **${flow.nameOf(game, targets[1])}**.`, components: [] });
+          await flow.maybeFinalizeNight(interaction.client, gameManager, game);
+          return;
+        }
+
         if (interaction.customId === 'sw_hunter_pick') {
           requireRoleHolder(game, 'THO_SAN', interaction.user.id);
           gameManager.submitHunterTarget(game, interaction.user.id, targetId);

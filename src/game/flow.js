@@ -56,7 +56,7 @@ async function setupRoleThreads(client, game) {
   }
 
   const groupLabel = {
-    TIEN_TRI: '🔮-tien-tri', BAO_VE: '🛡️-bao-ve', PHU_THUY: '🧪-phu-thuy', CAVE: '🕊️-cave', WOLVES: '🐺-bay-soi',
+    TIEN_TRI: '🔮-tien-tri', BAO_VE: '🛡️-bao-ve', PHU_THUY: '🧪-phu-thuy', CAVE: '🕊️-cave', WOLVES: '🐺-bay-soi', CUPID: '💘-cupid',
   };
 
   const channel = await client.channels.fetch(game.channelId);
@@ -304,6 +304,17 @@ async function sendNightPrompt(client, game, player) {
     return;
   }
 
+  if (roleId === 'CUPID') {
+    const options = aliveOptions(game); // Cupid duoc phep ghep ca chinh minh
+    if (options.length < 2) return;
+    const menu = new StringSelectMenuBuilder().setCustomId('sw_cupid_pick').setPlaceholder('Chọn đúng 2 người để ghép cặp').setMinValues(2).setMaxValues(2).addOptions(options);
+    await sendToRoleChannel(client, game, group, player.userId, {
+      content: `💘 <@${player.userId}> — **Đêm ${game.dayNumber} — Cupid**\nChọn đúng 2 người để ghép thành 1 cặp (chỉ dùng được đêm đầu tiên). Nếu sau này 1 người trong cặp chết, người kia chết theo; nếu 2 người khác phe sống sót đến khi chỉ còn lại 2 người, họ thắng riêng:`,
+      components: [new ActionRowBuilder().addComponents(menu)],
+    });
+    return;
+  }
+
   if (roleId === 'SOI_THUONG' || roleId === 'SOI_NGUYEN' || roleId === 'SOI_CON') {
     // Chi gui 1 lan cho ca bay (tranh spam nhieu tin nhac giong nhau) - kiem tra cờ da gui chua
     if (!game.night.wolfPromptSent) {
@@ -427,6 +438,14 @@ function logNightActions(game) {
     game.gameLog.push({
       dayNumber: game.dayNumber, userId: wolfCurseHolder.userId, roleId: 'SOI_NGUYEN',
       text: `chọn nguyền ${nameOf(game, night.curseTarget)}`,
+    });
+  }
+
+  const cupidHolder = engine.getPlayerByRole(game, 'CUPID');
+  if (cupidHolder && night.cupidTargets) {
+    game.gameLog.push({
+      dayNumber: game.dayNumber, userId: cupidHolder.userId, roleId: 'CUPID',
+      text: `chọn ghép cặp ${nameOf(game, night.cupidTargets[0])} 💞 ${nameOf(game, night.cupidTargets[1])}`,
     });
   }
 
@@ -564,11 +583,13 @@ async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
   const label = winnerFaction === FACTION.WOLF ? '🐺 PHE MA SÓI'
     : winnerFaction === FACTION.VILLAGER ? '🟢 PHE DÂN LÀNG'
       : winnerFaction === 'FOOL' ? '🤡 THẰNG NGỐ'
-        : String(winnerFaction);
+        : winnerFaction === 'LOVERS' ? '💞 CẶP ĐÔI CUPID'
+          : String(winnerFaction);
   const plainLabel = winnerFaction === FACTION.WOLF ? 'PHE MA SÓI'
     : winnerFaction === FACTION.VILLAGER ? 'PHE DÂN LÀNG'
       : winnerFaction === 'FOOL' ? 'THẰNG NGỐ'
-        : String(winnerFaction);
+        : winnerFaction === 'LOVERS' ? 'CẶP ĐÔI CUPID'
+          : String(winnerFaction);
 
   const roster = [...game.players.values()]
     .map((p) => `${p.isAlive ? '🟢' : '💀'} **${nameOf(game, p.userId)}** — ${ROLES[p.roleId].emoji} ${ROLES[p.roleId].name}`)

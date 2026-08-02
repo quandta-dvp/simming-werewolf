@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS games (
   player_count INTEGER, -- so nguoi choi khi start, tien cho thong ke sau nay
   day_count INTEGER, -- tong so ngay van keo dai toi khi ket thuc
   winning_faction TEXT CHECK (winning_faction IN ('villager', 'wolf', 'third_party')),
-  ended_reason TEXT, -- faction_win | fool_win | cancelled | v.v.
+  ended_reason TEXT, -- faction_win | fool_win | lovers_win | cancelled | v.v.
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   ended_at TIMESTAMPTZ
 );

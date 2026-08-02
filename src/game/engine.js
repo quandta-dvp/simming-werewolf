@@ -25,6 +25,17 @@ function aliveNonWolfCount(game) {
 }
 
 function checkWinner(game) {
+  // Cap doi Cupid khac phe, song sot toi khi chi con dung 2 nguoi -> thang rieng (giong Thang Ngo, mot nhanh phe 3)
+  if (game.couple) {
+    const [aId, bId] = game.couple;
+    const a = game.players.get(aId);
+    const b = game.players.get(bId);
+    if (a && b && a.isAlive && b.isAlive && a.faction !== b.faction) {
+      const aliveCount = [...game.players.values()].filter((p) => p.isAlive).length;
+      if (aliveCount === 2) return 'LOVERS';
+    }
+  }
+
   const wolves = aliveWolfCount(game);
   const others = aliveNonWolfCount(game);
   if (wolves === 0) return FACTION.VILLAGER;
@@ -32,23 +43,39 @@ function checkWinner(game) {
   return null;
 }
 
-// Neu 1 nguoi vua chet la Tho San va da chon truoc 1 muc tieu, muc tieu do chet theo ngay lap tuc.
-// Xu ly dang queue vi muc tieu bi keo theo cung co the la Tho San khac (hiem nhung van xu ly dung).
-function applyHunterCascade(game, deathList, log) {
+// Xu ly cac cai chet "keo theo" dang queue (co the day chuyen nhieu vong):
+// - Tho San chet -> muc tieu da chon truoc do chet theo ngay lap tuc.
+// - 1 nguoi trong cap Cupid chet -> nguoi con lai chet theo vi qua dau long.
+function applyDeathCascades(game, deathList, log) {
   const queue = [...deathList];
   while (queue.length) {
     const { userId } = queue.shift();
     const p = game.players.get(userId);
-    if (!p || p.roleId !== 'THO_SAN') continue;
-    const targetId = p.state.hunterTarget;
-    if (!targetId) continue;
-    const target = game.players.get(targetId);
-    if (!target || !target.isAlive) continue;
-    target.isAlive = false;
-    const entry = { userId: targetId, cause: 'hunter_shot' };
-    deathList.push(entry);
-    queue.push(entry);
-    log.push({ userId: targetId, text: `bị Thợ Săn (${game.displayNames?.get(userId) || userId}) bắn chết theo` });
+    if (!p) continue;
+
+    if (p.roleId === 'THO_SAN') {
+      const targetId = p.state.hunterTarget;
+      const target = targetId ? game.players.get(targetId) : null;
+      if (target && target.isAlive) {
+        target.isAlive = false;
+        const entry = { userId: targetId, cause: 'hunter_shot' };
+        deathList.push(entry);
+        queue.push(entry);
+        log.push({ userId: targetId, text: `bị Thợ Săn (${game.displayNames?.get(userId) || userId}) bắn chết theo` });
+      }
+    }
+
+    if (game.couple && game.couple.includes(userId)) {
+      const partnerId = game.couple.find((id) => id !== userId);
+      const partner = partnerId ? game.players.get(partnerId) : null;
+      if (partner && partner.isAlive) {
+        partner.isAlive = false;
+        const entry = { userId: partnerId, cause: 'heartbreak' };
+        deathList.push(entry);
+        queue.push(entry);
+        log.push({ userId: partnerId, text: 'quá đau lòng vì người yêu (do Cupid ghép) chết, chết theo ngay' });
+      }
+    }
   }
 }
 
@@ -87,12 +114,14 @@ function resolveNight(game) {
   const witchHolder = getPlayerByRole(game, 'PHU_THUY');
   const seerHolder = getPlayerByRole(game, 'TIEN_TRI');
   const soiNguyenHolder = getPlayerByRole(game, 'SOI_NGUYEN');
+  const cupidHolder = getPlayerByRole(game, 'CUPID');
 
   const wolfKillBlockedByCave = !!(nullifiedPlayer && nullifiedPlayer.faction === FACTION.WOLF);
   const guardNullified = !!(guardHolder && nullifiedPlayer && guardHolder.userId === nullifiedPlayer.userId);
   const witchNullified = !!(witchHolder && nullifiedPlayer && witchHolder.userId === nullifiedPlayer.userId);
   const seerNullified = !!(seerHolder && nullifiedPlayer && seerHolder.userId === nullifiedPlayer.userId);
   const curseNullified = !!(soiNguyenHolder && nullifiedPlayer && soiNguyenHolder.userId === nullifiedPlayer.userId);
+  const cupidNullified = !!(cupidHolder && nullifiedPlayer && cupidHolder.userId === nullifiedPlayer.userId);
 
   // --- Wolf kill(s) ---
   const bonusKills = game.wolfCubBonusPending ? 2 : 1;
@@ -130,6 +159,22 @@ function resolveNight(game) {
     game.cursedUserIds.add(night.curseTarget);
   }
 
+  // --- Cupid ghep cap (chi dem 1) ---
+  if (night.cupidTargets && !game.couple) {
+    if (cupidNullified) {
+      log.push({ userId: cupidHolder.userId, text: 'bị Cave ngủ cùng đúng đêm nay nên không ghép được cặp nào' });
+    } else {
+      const [aId, bId] = night.cupidTargets;
+      const a = game.players.get(aId);
+      const b = game.players.get(bId);
+      if (a && a.isAlive && b && b.isAlive) {
+        game.couple = [aId, bId];
+        log.push({ userId: aId, text: `được Cupid ghép cặp cùng ${game.displayNames?.get(bId) || bId}` });
+        log.push({ userId: bId, text: `được Cupid ghép cặp cùng ${game.displayNames?.get(aId) || aId}` });
+      }
+    }
+  }
+
   // --- Ap dung deaths (dot 1: tu Soi/Phu Thuy) ---
   const deathList = [];
   for (const [userId, cause] of deaths.entries()) {
@@ -144,8 +189,8 @@ function resolveNight(game) {
     }
   }
 
-  // --- Tho San: neu chet, keo theo muc tieu da chon truoc do (xu ly cascade) ---
-  applyHunterCascade(game, deathList, log);
+  // --- Tho San / Cupid: xu ly cac cai chet keo theo (cascade) ---
+  applyDeathCascades(game, deathList, log);
 
   // --- Seer ---
   const seerResults = [];
@@ -207,7 +252,7 @@ function resolveDayVote(game) {
     game.wolfCubBonusUsed = true;
     game.wolfCubBonusPending = true;
   }
-  applyHunterCascade(game, deathList, log); // neu nguoi bi treo la Tho San, muc tieu da chon truoc chet theo
+  applyDeathCascades(game, deathList, log); // neu nguoi bi treo la Tho San hoac nam trong cap Cupid, keo theo cai chet
   result.extraDeaths = deathList.slice(1); // nhung nguoi chet an theo (Tho San keo theo)
   return result;
 }
