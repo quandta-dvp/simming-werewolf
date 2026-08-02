@@ -349,7 +349,13 @@ module.exports = {
 
         if (interaction.customId === 'sw_day_vote') {
           gameManager.submitDayVote(game, interaction.user.id, targetId);
-          await interaction.update({ embeds: [flow.buildVoteTallyEmbed(game)], components: interaction.message.components });
+          try {
+            await interaction.update({ embeds: [flow.buildVoteTallyEmbed(game)], components: interaction.message.components });
+          } catch (err) {
+            // Bang vote co the da bi auto-bump (xoa + gui lai) trong luc nguoi nay dang chon - phieu van duoc ghi nhan binh thuong.
+            console.error('[sw_day_vote] không edit được tin nhắn cũ (có thể đã bị bump), phiếu vẫn được ghi nhận:', err.message);
+            await replyOrFollowUp(interaction, { content: '🗳️ Đã ghi nhận phiếu của bạn.', flags: MessageFlags.Ephemeral });
+          }
           await flow.maybeFinalizeDayVote(interaction.client, gameManager, game);
           return;
         }

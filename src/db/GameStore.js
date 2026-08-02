@@ -40,6 +40,7 @@ class GameStore {
       night: serializeNight(game.night),
       dayVotes: game.dayVotes ? mapToObject(game.dayVotes) : null,
       cursedUserIds: game.cursedUserIds ? [...game.cursedUserIds] : [],
+      couple: game.couple || null,
       wolfCubBonusPending: game.wolfCubBonusPending,
       wolfCubBonusUsed: game.wolfCubBonusUsed,
       threads: game.threads || {},
@@ -68,6 +69,7 @@ class GameStore {
       night: deserializeNight(data.night),
       dayVotes: data.dayVotes ? objectToMap(data.dayVotes) : null,
       cursedUserIds: new Set(data.cursedUserIds || []),
+      couple: data.couple || null,
       wolfCubBonusPending: !!data.wolfCubBonusPending,
       wolfCubBonusUsed: !!data.wolfCubBonusUsed,
       threads: data.threads || {},
@@ -205,6 +207,7 @@ function serializeNight(night) {
     caveTarget: night.caveTarget,
     witchAction: night.witchAction ?? null,
     seerTarget: night.seerTarget,
+    cupidTargets: night.cupidTargets ?? null,
     submittedUserIds: night.submittedUserIds ? [...night.submittedUserIds] : [],
     promptMessages: night.promptMessages || [],
   };
@@ -219,6 +222,7 @@ function deserializeNight(data) {
     caveTarget: data.caveTarget,
     witchAction: data.witchAction ?? null,
     seerTarget: data.seerTarget,
+    cupidTargets: data.cupidTargets ?? undefined,
     submittedUserIds: new Set(data.submittedUserIds || []),
     promptMessages: data.promptMessages || [],
   };

@@ -500,17 +500,64 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
 
 // ============ DAY VOTE ============
 
+function buildDayVoteRow(game) {
+  const alive = [...game.players.values()].filter((p) => p.isAlive);
+  const options = alive.map((p) => ({ label: nameOf(game, p.userId), value: p.userId })).concat([{ label: 'Không treo ai', value: 'NONE', emoji: '🚫' }]);
+  const menu = new StringSelectMenuBuilder().setCustomId('sw_day_vote').setPlaceholder('Chọn người để treo cổ').addOptions(options);
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+// Dung lai chinh xac object `game` con dang active trong GameManager (khong phai ban cu bi cancel/thay
+// the) va van dang trong DAY_VOTE - tu dung neu khong con dung, khong can flow.js goi dep tu ben ngoai.
+function stopVoteBump(game) {
+  if (game.voteBumpTimer) {
+    clearInterval(game.voteBumpTimer);
+    game.voteBumpTimer = null;
+  }
+}
+
+async function bumpVoteMessage(client, gameManager, game) {
+  const stillVoting = gameManager.getGame(game.guildId) === game && game.phase === 'DAY_VOTE';
+  if (!stillVoting) {
+    stopVoteBump(game);
+    return;
+  }
+  if (game.voteChannelId && game.voteMessageId) {
+    try {
+      const oldChannel = await client.channels.fetch(game.voteChannelId);
+      const oldMsg = await oldChannel.messages.fetch(game.voteMessageId);
+      await oldMsg.delete();
+    } catch { /* tin cu co the da bi xoa hoac khong tim thay, bo qua */ }
+  }
+  try {
+    const msg = await channelSend(client, game.channelId, {
+      embeds: [buildVoteTallyEmbed(game)],
+      components: [buildDayVoteRow(game)],
+    });
+    game.voteChannelId = game.channelId;
+    game.voteMessageId = msg.id;
+  } catch (err) {
+    console.error('[bumpVoteMessage] lỗi gửi lại bảng vote:', err.message);
+  }
+}
+
+function startVoteBump(client, gameManager, game) {
+  stopVoteBump(game);
+  game.voteBumpTimer = setInterval(() => {
+    bumpVoteMessage(client, gameManager, game).catch((err) => console.error('[voteBump] lỗi:', err.message));
+  }, 5000);
+}
+
 async function openDayVote(client, gameManager, game) {
   gameManager.beginDayVote(game);
   await cacheDisplayNames(client, game);
-  const alive = gameManager.getAlivePlayers(game);
-  const options = alive.map((p) => ({ label: nameOf(game, p.userId), value: p.userId })).concat([{ label: 'Không treo ai', value: 'NONE', emoji: '🚫' }]);
-  const embed = new EmbedBuilder()
-    .setTitle('🗳️ Bỏ Phiếu Treo Cổ')
-    .setDescription('Chọn người bạn nghi ngờ là Sói, hoặc "Không treo ai".')
-    .addFields({ name: 'Kết quả hiện tại', value: 'Chưa có ai vote.' });
-  const menu = new StringSelectMenuBuilder().setCustomId('sw_day_vote').setPlaceholder('Chọn người để treo cổ').addOptions(options);
-  await channelSend(client, game.channelId, { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+  const msg = await channelSend(client, game.channelId, {
+    embeds: [buildVoteTallyEmbed(game)],
+    components: [buildDayVoteRow(game)],
+  });
+  game.voteChannelId = game.channelId;
+  game.voteMessageId = msg.id;
+  startVoteBump(client, gameManager, game);
   await refreshControlPanelInPlace(client, game);
 }
 
@@ -536,6 +583,7 @@ async function maybeFinalizeDayVote(client, gameManager, game) {
 }
 
 async function resolveAndAnnounceDayVote(client, gameManager, game) {
+  stopVoteBump(game);
   const result = engine.resolveDayVote(game);
 
   if (result.log) {
@@ -577,6 +625,7 @@ async function resolveAndAnnounceDayVote(client, gameManager, game) {
 // ============ END GAME ============
 
 async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
+  stopVoteBump(game);
   game.status = 'ENDED';
   await cacheDisplayNames(client, game);
 
@@ -638,6 +687,8 @@ module.exports = {
   resolveAndAnnounceNight,
   openDayVote,
   buildVoteTallyEmbed,
+  bumpVoteMessage,
+  stopVoteBump,
   maybeFinalizeDayVote,
   resolveAndAnnounceDayVote,
   endGame,
