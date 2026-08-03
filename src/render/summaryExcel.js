@@ -23,9 +23,12 @@ const DEAD_FILL = 'FFF4CCCC';
  * @param {object} game - object game (da ket thuc, con day du players/gameLog trong RAM)
  * @param {Map<string,string>} displayNames - userId -> ten hien thi (Discord)
  * @param {string} winnerLabel - vd "PHE MA SÓI", "PHE DÂN LÀNG", "THẰNG NGỐ"
+ * @param {object} [options]
+ * @param {string} [options.titleOverride] - neu co, dung nguyen van lam tieu de thay vi "... ${winnerLabel} THẮNG!"
+ *   (dung cho truong hop game bi HUY giua tran, khong co ai thang)
  * @returns {Promise<Buffer>} buffer file .xlsx
  */
-async function renderGameSummaryExcel(game, displayNames, winnerLabel) {
+async function renderGameSummaryExcel(game, displayNames, winnerLabel, options = {}) {
   const players = [...game.players.values()];
   const dayCount = Math.max(game.dayNumber, 1);
   const days = Array.from({ length: dayCount }, (_, i) => i + 1);
@@ -50,7 +53,7 @@ async function renderGameSummaryExcel(game, displayNames, winnerLabel) {
   const totalCols = 2 + dayCount; // Nguoi choi + Vai tro + N ngay
   sheet.mergeCells(1, 1, 1, totalCols);
   const titleCell = sheet.getCell(1, 1);
-  titleCell.value = `KẾT QUẢ TRẬN — ${winnerLabel} THẮNG!`;
+  titleCell.value = options.titleOverride || `KẾT QUẢ TRẬN — ${winnerLabel} THẮNG!`;
   titleCell.font = { name: 'Arial', size: 14, bold: true };
   titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
   sheet.getRow(1).height = 26;

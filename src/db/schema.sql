@@ -46,16 +46,20 @@ CREATE INDEX IF NOT EXISTS idx_game_players_user_id ON game_players(user_id);
 CREATE INDEX IF NOT EXISTS idx_game_logs_game_id ON game_logs(game_id);
 
 -- View tien loi cho /simwolf stats va /simwolf leaderboard
+-- Loai bo cac tran bi HUY GIUA CHUNG (ended_reason='cancelled') khoi thong ke,
+-- vi khong ai thang/thua that su trong tran do (vd host huy vi co nguoi disconnect).
 CREATE OR REPLACE VIEW player_stats AS
 SELECT
-  user_id,
+  gp.user_id AS user_id,
   COUNT(*) AS games_played,
-  COUNT(*) FILTER (WHERE won) AS games_won,
-  ROUND(100.0 * COUNT(*) FILTER (WHERE won) / NULLIF(COUNT(*), 0), 1) AS win_rate,
-  COUNT(*) FILTER (WHERE faction = 'wolf') AS games_as_wolf,
-  ROUND(100.0 * COUNT(*) FILTER (WHERE faction = 'wolf') / NULLIF(COUNT(*), 0), 1) AS wolf_rate
-FROM game_players
-GROUP BY user_id;
+  COUNT(*) FILTER (WHERE gp.won) AS games_won,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE gp.won) / NULLIF(COUNT(*), 0), 1) AS win_rate,
+  COUNT(*) FILTER (WHERE gp.faction = 'wolf') AS games_as_wolf,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE gp.faction = 'wolf') / NULLIF(COUNT(*), 0), 1) AS wolf_rate
+FROM game_players gp
+JOIN games g ON g.id = gp.game_id
+WHERE g.ended_reason IS DISTINCT FROM 'cancelled'
+GROUP BY gp.user_id;
 
 -- =========================================================================
 -- NHOM B — LIVE STATE: snapshot toan bo game dang chay (RAM) de restart

@@ -79,6 +79,64 @@ async function saveFinishedGame(game, winnerFaction) {
   }
 }
 
+/**
+ * Ghi lai 1 tran BI HUY GIUA CHUNG (host bam "Hủy Game Giữa Trận" tren bang dieu
+ * khien, vd co nguoi bi disconnect). Khac saveFinishedGame: khong co winner,
+ * moi nguoi deu won=false, va ended_reason='cancelled' de player_stats VIEW loai
+ * tran nay ra khoi tinh win_rate/games_played (xem schema.sql).
+ *
+ * @param {object} game - object game (con day du players/gameLog trong RAM luc bi huy)
+ * @returns {Promise<number|null>} id cua row trong bang games, hoac null neu khong luu duoc
+ */
+async function saveCancelledGame(game) {
+  if (!pool) {
+    console.warn('[gameRepository] Chưa cấu hình DATABASE_URL — không lưu kết quả trận (đã hủy) vào DB.');
+    return null;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const players = [...game.players.values()];
+
+    const gameRes = await client.query(
+      `INSERT INTO games (guild_id, channel_id, host_id, player_count, day_count, winning_faction, ended_reason, started_at, ended_at)
+       VALUES ($1, $2, $3, $4, $5, NULL, 'cancelled', to_timestamp($6 / 1000.0), now())
+       RETURNING id`,
+      [game.guildId, game.channelId, game.hostId, players.length, game.dayNumber, game.startedAt || game.createdAt]
+    );
+    const gameId = gameRes.rows[0].id;
+
+    for (const p of players) {
+      await client.query(
+        `INSERT INTO game_players (game_id, user_id, role_id, faction, survived, won)
+         VALUES ($1, $2, $3, $4, $5, false)
+         ON CONFLICT (game_id, user_id) DO NOTHING`,
+        [gameId, p.userId, p.roleId, p.faction, p.isAlive]
+      );
+    }
+
+    for (const entry of game.gameLog || []) {
+      const p = game.players.get(entry.userId);
+      await client.query(
+        `INSERT INTO game_logs (game_id, day_number, user_id, role_id, text)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [gameId, entry.dayNumber, entry.userId, entry.roleId || (p ? p.roleId : null), entry.text]
+      );
+    }
+
+    await client.query('COMMIT');
+    return gameId;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[gameRepository.saveCancelledGame] Lỗi lưu kết quả trận (đã hủy) vào DB:', err.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
 /** Lay thong ke 1 nguoi choi tu view player_stats. Tra ve null neu chua tung choi tran nao hoac loi DB. */
 async function getPlayerStats(userId) {
   if (!pool) return null;
@@ -106,4 +164,6 @@ async function getLeaderboard(limit = 10, minGames = 1) {
   }
 }
 
-module.exports = { saveFinishedGame, getPlayerStats, getLeaderboard };
+module.exports = {
+  saveFinishedGame, saveCancelledGame, getPlayerStats, getLeaderboard,
+};

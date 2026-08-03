@@ -196,6 +196,22 @@ module.exports = {
           return;
         }
 
+        if (interaction.customId === 'sw_panel_force_cancel') {
+          if (!game) {
+            await interaction.reply({ content: '⚠️ Không có phòng nào đang chạy.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          if (game.hostId !== interaction.user.id) {
+            await interaction.reply({ content: '⛔ Chỉ host mới được hủy game giữa trận.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          // Duoc phep bam o BAT KY dem/ngay nao (khong check phase) - dung cho truong hop can huy khan cap
+          // vd co nguoi choi bi disconnect ma game khong the tiep tuc binh thuong.
+          await interaction.deferUpdate();
+          await flow.forceCancelGame(interaction.client, gameManager, game, interaction.user.id);
+          return;
+        }
+
         if (interaction.customId === 'sw_status') {
           if (!game) {
             await interaction.reply({ content: '⚠️ Không có phòng nào đang mở.', flags: MessageFlags.Ephemeral });

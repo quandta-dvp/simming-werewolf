@@ -5,7 +5,7 @@ const { ROLES, FACTION } = require('./constants');
 const { GameManager } = require('./GameManager');
 const engine = require('./engine');
 const { renderGameSummaryExcel } = require('../render/summaryExcel');
-const { saveFinishedGame } = require('../db/gameRepository');
+const { saveFinishedGame, saveCancelledGame } = require('../db/gameRepository');
 
 async function cacheDisplayNames(client, game) {
   game.displayNames = game.displayNames || new Map();
@@ -182,7 +182,10 @@ function buildControlPanelButtons() {
     new ButtonBuilder().setCustomId('sw_panel_open_vote').setLabel('Mở Vote').setEmoji('🗳️').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('sw_panel_end_vote').setLabel('Kết Thúc Vote').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
   );
-  return [row1, row2];
+  const row3 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('sw_panel_force_cancel').setLabel('Hủy Game Giữa Trận').setEmoji('🛑').setStyle(ButtonStyle.Danger),
+  );
+  return [row1, row2, row3];
 }
 
 async function postOrBumpControlPanel(client, game) {
@@ -673,6 +676,42 @@ async function endGame(client, gameManager, game, winnerFaction, extra = {}) {
   gameManager.cancelGame(game.guildId);
 }
 
+// Huy game GIUA TRAN (khong phai het game tu nhien co phe thang) - dung khi vd co nguoi choi
+// bi disconnect va host quyet dinh khong the tiep tuc. Co the goi o BAT KY dem hoac ngay nao.
+async function forceCancelGame(client, gameManager, game, canceledByUserId) {
+  stopVoteBump(game);
+  game.status = 'ENDED';
+  await cacheDisplayNames(client, game);
+
+  const roster = [...game.players.values()]
+    .map((p) => `${p.isAlive ? '🟢' : '💀'} **${nameOf(game, p.userId)}** — ${ROLES[p.roleId].emoji} ${ROLES[p.roleId].name}`)
+    .join('\n');
+
+  const embed = new EmbedBuilder()
+    .setTitle('🛑 GAME ĐÃ BỊ HỦY GIỮA TRẬN')
+    .setDescription(`Bị hủy bởi <@${canceledByUserId}> lúc **Ngày/Đêm ${game.dayNumber}**.\n\n${roster}`)
+    .setColor(0x808080);
+
+  await channelSend(client, game.channelId, { embeds: [embed] });
+
+  // van xuat file Excel tong ket nhung log da co (den luc bi huy), de anh xem lai neu can
+  try {
+    const buffer = await renderGameSummaryExcel(game, game.displayNames, null, { titleOverride: `TRẬN BỊ HỦY GIỮA CHỪNG (Ngày/Đêm ${game.dayNumber})` });
+    const attachment = new AttachmentBuilder(buffer, { name: 'ket-qua-tran-bi-huy.xlsx' });
+    await channelSend(client, game.channelId, { files: [attachment] });
+  } catch (err) {
+    console.error('[forceCancelGame] Lỗi tạo file Excel tổng kết:', err.message);
+  }
+
+  await channelSend(client, game.channelId, '_(Mọi người có thể chat lại bình thường ngay bây giờ.)_');
+
+  // luu vao Postgres nhung KHONG tinh vao win_rate/games_played cua ai (xem player_stats view trong schema.sql)
+  saveCancelledGame(game).catch((err) => console.error('[forceCancelGame] Lỗi lưu kết quả trận (đã hủy):', err.message));
+
+  await closeAllThreads(game, client);
+  gameManager.cancelGame(game.guildId);
+}
+
 module.exports = {
   setupRoleThreads,
   addPlayerToRoleThread,
@@ -696,6 +735,7 @@ module.exports = {
   maybeFinalizeDayVote,
   resolveAndAnnounceDayVote,
   endGame,
+  forceCancelGame,
   nameOf,
   cacheDisplayNames,
   logNightActions,
