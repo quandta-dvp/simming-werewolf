@@ -473,6 +473,10 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
     const text = `Kết quả soi: **${nameOf(game, r.userId)}** ${r.isWolf ? '**LÀ** phe Sói.' : '**KHÔNG PHẢI** phe Sói.'}`;
     if (seerHolder) {
       sendToRoleChannel(client, game, 'TIEN_TRI', seerHolder.userId, { content: `🔮 ${text}` }).catch(() => {});
+      game.gameLog.push({
+        dayNumber: game.dayNumber, userId: seerHolder.userId, roleId: 'TIEN_TRI',
+        text: `soi ra ${nameOf(game, r.userId)}: ${r.isWolf ? 'LÀ Sói' : 'KHÔNG PHẢI Sói'}`,
+      });
     }
   }
 
