@@ -277,7 +277,7 @@ module.exports = {
         if (interaction.customId === 'sw_seer_pick') {
           requireRoleHolder(game, 'TIEN_TRI', interaction.user.id);
           gameManager.submitSeerTarget(game, interaction.user.id, targetId);
-          await interaction.update({ content: '🔮 Đã ghi nhận. Kết quả sẽ được gửi cuối đêm.', components: [] });
+          await interaction.update({ content: `🔮 Đang soi: **${flow.nameOf(game, targetId)}**. Kết quả sẽ được gửi cuối đêm. _(bạn có thể chọn lại nếu đổi ý, miễn đêm chưa kết thúc)_`, components: interaction.message.components });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
@@ -285,7 +285,8 @@ module.exports = {
         if (interaction.customId === 'sw_guard_pick') {
           requireRoleHolder(game, 'BAO_VE', interaction.user.id);
           gameManager.submitGuardTarget(game, interaction.user.id, targetId);
-          await interaction.update({ content: '🛡️ Đã ghi nhận lựa chọn bảo vệ.', components: [] });
+          const guardLabel = targetId === 'SKIP' ? 'không bảo vệ ai' : `bảo vệ **${flow.nameOf(game, targetId)}**`;
+          await interaction.update({ content: `🛡️ Đang chọn: ${guardLabel}. _(có thể chọn lại nếu đổi ý)_`, components: interaction.message.components });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
@@ -293,7 +294,8 @@ module.exports = {
         if (interaction.customId === 'sw_cave_pick') {
           requireRoleHolder(game, 'CAVE', interaction.user.id);
           gameManager.submitCaveTarget(game, interaction.user.id, targetId);
-          await interaction.update({ content: '🕊️ Đã ghi nhận lựa chọn ngủ cùng.', components: [] });
+          const label = targetId === 'ALONE' ? 'ngủ một mình' : `ngủ cùng **${flow.nameOf(game, targetId)}**`;
+          await interaction.update({ content: `🕊️ Đang chọn: ${label}. _(có thể chọn lại nếu đổi ý)_`, components: interaction.message.components });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
@@ -310,7 +312,8 @@ module.exports = {
           requireRoleHolder(game, 'SOI_NGUYEN', interaction.user.id);
           const chosen = interaction.values[0] || null;
           gameManager.submitCurseTarget(game, interaction.user.id, chosen);
-          await interaction.update({ content: chosen ? '☠️ Đã ghi nhận lựa chọn nguyền.' : '☠️ Không nguyền ai đêm nay.', components: [] });
+          const curseLabel = chosen ? `nguyền **${flow.nameOf(game, chosen)}**` : 'không nguyền ai';
+          await interaction.update({ content: `☠️ Đang chọn: ${curseLabel}. _(có thể chọn lại nếu đổi ý)_`, components: interaction.message.components });
           return;
         }
 
@@ -333,7 +336,8 @@ module.exports = {
           } else {
             gameManager.submitWitchAction(game, interaction.user.id, { type: 'skip' });
           }
-          await interaction.update({ content: '🧪 Đã ghi nhận quyết định của Phù Thủy.', components: [] });
+          const choiceLabel = choice === 'heal' ? 'cứu người bị cắn' : 'không làm gì đêm nay';
+          await interaction.update({ content: `🧪 Đang chọn: ${choiceLabel}. _(có thể chọn lại nếu đổi ý, kể cả đổi sang đầu độc)_`, components: interaction.message.components });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
@@ -341,7 +345,7 @@ module.exports = {
         if (interaction.customId === 'sw_witch_poison_target') {
           requireRoleHolder(game, 'PHU_THUY', interaction.user.id);
           gameManager.submitWitchAction(game, interaction.user.id, { type: 'poison', targetId });
-          await interaction.update({ content: '🧪 Đã ghi nhận quyết định của Phù Thủy.', components: [] });
+          await interaction.update({ content: `🧪 Đang chọn đầu độc: **${flow.nameOf(game, targetId)}**. _(có thể chọn lại nếu đổi ý)_`, components: interaction.message.components });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
@@ -350,7 +354,7 @@ module.exports = {
           requireRoleHolder(game, 'CUPID', interaction.user.id);
           const targets = interaction.values;
           gameManager.submitCupidTargets(game, interaction.user.id, targets);
-          await interaction.update({ content: `💘 Đã ghép cặp: **${flow.nameOf(game, targets[0])}** 💞 **${flow.nameOf(game, targets[1])}**.`, components: [] });
+          await interaction.update({ content: `💘 Đang ghép cặp: **${flow.nameOf(game, targets[0])}** 💞 **${flow.nameOf(game, targets[1])}**. _(có thể chọn lại nếu đổi ý)_`, components: interaction.message.components });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }
@@ -358,7 +362,7 @@ module.exports = {
         if (interaction.customId === 'sw_hunter_pick') {
           requireRoleHolder(game, 'THO_SAN', interaction.user.id);
           gameManager.submitHunterTarget(game, interaction.user.id, targetId);
-          await interaction.update({ content: `🏹 Đã ghi nhận mục tiêu nhắm trước: **${flow.nameOf(game, targetId)}**.`, components: [] });
+          await interaction.update({ content: `🏹 Đang nhắm trước: **${flow.nameOf(game, targetId)}**. _(có thể chọn lại nếu đổi ý)_`, components: interaction.message.components });
           await flow.maybeFinalizeNight(interaction.client, gameManager, game);
           return;
         }

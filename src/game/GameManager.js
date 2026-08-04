@@ -157,10 +157,10 @@ class GameManager {
 
   // ---------- Threads ----------
 
-  static threadGroupOf(roleId) {
-    if (roleId === 'SOI_THUONG' || roleId === 'SOI_NGUYEN' || roleId === 'SOI_CON') return 'WOLVES';
+  static threadGroupOf(roleId, faction) {
+    if (faction === FACTION.WOLF) return 'WOLVES'; // gom ca Ban Soi da hoa Soi (roleId van la BAN_SOI nhung faction doi sang wolf)
     if (roleId === 'TIEN_TRI' || roleId === 'BAO_VE' || roleId === 'PHU_THUY' || roleId === 'CAVE' || roleId === 'THO_SAN' || roleId === 'CUPID') return roleId;
-    return null; // DAN_THUONG, THANG_NGO, BAN_SOI (chua can) - khong co thread rieng
+    return null; // DAN_THUONG, THANG_NGO, BAN_SOI (chua bi can) - khong co thread rieng
   }
 
   // ---------- Night state ----------
@@ -187,6 +187,7 @@ class GameManager {
 
   getNightActors(game) {
     return this.getAlivePlayers(game).filter((p) => {
+      if (p.faction === FACTION.WOLF) return true; // ca Ban Soi da hoa Soi cung phai duoc tinh la actor de vote can dem
       if (!ROLES[p.roleId].hasNightAction) return false;
       if (p.roleId === 'CUPID') return game.dayNumber === 1; // Cupid chi hanh dong dem dau tien
       return true;
@@ -227,9 +228,6 @@ class GameManager {
 
   submitCaveTarget(game, userId, targetId) {
     const player = game.players.get(userId);
-    if (game.night.submittedUserIds.has(userId)) {
-      throw new Error('Bạn đã chọn ngủ cùng ai đêm nay rồi, không thể đổi.');
-    }
     if (targetId !== 'ALONE' && player.state.lastCaveTarget === targetId) {
       throw new Error('Không được ngủ với cùng 1 người 2 đêm liên tiếp.');
     }
@@ -239,12 +237,13 @@ class GameManager {
     this._persist(game);
   }
 
+  // Luu y: KHONG danh dau healUsed/poisonUsed o day - de nguoi choi con doi y (vd chon
+  // poison roi doi sang heal) trong cung 1 dem ma khong bi mat oan 1 binh. Co "*Used"
+  // chi thuc su duoc chot trong engine.resolveNight, dua tren lua chon CUOI CUNG dem do.
   submitWitchAction(game, userId, action) {
     const player = game.players.get(userId);
     if (action.type === 'heal' && player.state.healUsed) throw new Error('Bạn đã dùng bình cứu rồi.');
     if (action.type === 'poison' && player.state.poisonUsed) throw new Error('Bạn đã dùng bình độc rồi.');
-    if (action.type === 'heal') player.state.healUsed = true;
-    if (action.type === 'poison') player.state.poisonUsed = true;
     game.night.witchAction = action;
     game.night.submittedUserIds.add(userId);
     this._persist(game);

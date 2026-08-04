@@ -49,7 +49,7 @@ async function channelSend(client, channelId, payload) {
 async function setupRoleThreads(client, game) {
   const groups = new Map(); // groupKey -> [player,...]
   for (const p of game.players.values()) {
-    const group = GameManager.threadGroupOf(p.roleId);
+    const group = GameManager.threadGroupOf(p.roleId, p.faction);
     if (!group) continue;
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push(p);
@@ -262,7 +262,7 @@ async function beginNight(client, gameManager, game) {
 
 async function sendNightPrompt(client, game, player) {
   const roleId = player.roleId;
-  const group = GameManager.threadGroupOf(roleId);
+  const group = GameManager.threadGroupOf(roleId, player.faction);
 
   if (roleId === 'TIEN_TRI') {
     const options = aliveOptions(game, { excludeUserId: player.userId });
@@ -318,7 +318,9 @@ async function sendNightPrompt(client, game, player) {
     return;
   }
 
-  if (roleId === 'SOI_THUONG' || roleId === 'SOI_NGUYEN' || roleId === 'SOI_CON') {
+  if (player.faction === FACTION.WOLF) {
+    // Bat ky ai thuoc phe Soi deu tham gia vote can chung - ke ca Ban Soi da bi can trung va
+    // chuyen phe (roleId van la BAN_SOI, chi faction doi thanh wolf).
     // Chi gui 1 lan cho ca bay (tranh spam nhieu tin nhac giong nhau) - kiem tra cờ da gui chua
     if (!game.night.wolfPromptSent) {
       game.night.wolfPromptSent = true;
@@ -462,47 +464,56 @@ function logNightActions(game) {
 }
 
 async function resolveAndAnnounceNight(client, gameManager, game) {
-  await disableNightPrompts(client, game);
-  logNightActions(game);
-  const result = engine.resolveNight(game);
+  // Chan re-entrancy: neu 2 su kien gan nhau (vd 2 vai tro submit gan nhu cung luc, hoac
+  // host bam "Bo Qua" dung luc dem vua du dieu kien resolve) cung goi ham nay, chi cho
+  // DUY NHAT 1 lan thuc su chay - tranh nhan doi tin nhan / nhay 2 lan sang ngay/dem ke tiep.
+  if (game._resolvingPhase) return;
+  game._resolvingPhase = true;
+  try {
+    await disableNightPrompts(client, game);
+    logNightActions(game);
+    const result = engine.resolveNight(game);
 
-  for (const entry of result.log) {
-    const p = game.players.get(entry.userId);
-    game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
-  }
-
-  const seerHolder = engine.getPlayerByRoleAny(game, 'TIEN_TRI');
-  for (const r of result.seerResults) {
-    const text = `Kết quả soi: **${nameOf(game, r.userId)}** ${r.isWolf ? '**LÀ** phe Sói.' : '**KHÔNG PHẢI** phe Sói.'}`;
-    if (seerHolder) {
-      sendToRoleChannel(client, game, 'TIEN_TRI', seerHolder.userId, { content: `🔮 ${text}` }).catch(() => {});
-      game.gameLog.push({
-        dayNumber: game.dayNumber, userId: seerHolder.userId, roleId: 'TIEN_TRI',
-        text: `soi ra ${nameOf(game, r.userId)}: ${r.isWolf ? 'LÀ Sói' : 'KHÔNG PHẢI Sói'}`,
-      });
+    for (const entry of result.log) {
+      const p = game.players.get(entry.userId);
+      game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
     }
+
+    const seerHolder = engine.getPlayerByRoleAny(game, 'TIEN_TRI');
+    for (const r of result.seerResults) {
+      const text = `Kết quả soi: **${nameOf(game, r.userId)}** ${r.isWolf ? '**LÀ** phe Sói.' : '**KHÔNG PHẢI** phe Sói.'}`;
+      if (seerHolder) {
+        sendToRoleChannel(client, game, 'TIEN_TRI', seerHolder.userId, { content: `🔮 ${text}` }).catch(() => {});
+        game.gameLog.push({
+          dayNumber: game.dayNumber, userId: seerHolder.userId, roleId: 'TIEN_TRI',
+          text: `soi ra ${nameOf(game, r.userId)}: ${r.isWolf ? 'LÀ Sói' : 'KHÔNG PHẢI Sói'}`,
+        });
+      }
+    }
+
+    for (const userId of result.convertedBanSoi) {
+      await addPlayerToRoleThread(client, game, 'WOLVES', userId).catch(() => {});
+    }
+
+    const deathNames = result.deaths.map((d) => nameOf(game, d.userId));
+    const deathText = deathNames.length
+      ? deathNames.map((n) => `💀 **${n}** đã chết.`).join('\n')
+      : '☀️ Đêm qua không ai chết.';
+    await channelSend(client, game.channelId, `☀️ **Ngày ${game.dayNumber}**\n${deathText}`);
+
+    const winner = engine.checkWinner(game);
+    if (winner) {
+      await endGame(client, gameManager, game, winner);
+      return;
+    }
+
+    game.phase = 'DAY_DISCUSS';
+    gameManager._persist(game);
+    await postOrBumpControlPanel(client, game);
+    await channelSend(client, game.channelId, `💬 Mọi người thảo luận. Host bấm **Mở Vote** trên bảng điều khiển khi sẵn sàng.`);
+  } finally {
+    game._resolvingPhase = false;
   }
-
-  for (const userId of result.convertedBanSoi) {
-    await addPlayerToRoleThread(client, game, 'WOLVES', userId).catch(() => {});
-  }
-
-  const deathNames = result.deaths.map((d) => nameOf(game, d.userId));
-  const deathText = deathNames.length
-    ? deathNames.map((n) => `💀 **${n}** đã chết.`).join('\n')
-    : '☀️ Đêm qua không ai chết.';
-  await channelSend(client, game.channelId, `☀️ **Ngày ${game.dayNumber}**\n${deathText}`);
-
-  const winner = engine.checkWinner(game);
-  if (winner) {
-    await endGame(client, gameManager, game, winner);
-    return;
-  }
-
-  game.phase = 'DAY_DISCUSS';
-  gameManager._persist(game);
-  await postOrBumpControlPanel(client, game);
-  await channelSend(client, game.channelId, `💬 Mọi người thảo luận. Host bấm **Mở Vote** trên bảng điều khiển khi sẵn sàng.`);
 }
 
 // ============ DAY VOTE ============
@@ -590,43 +601,51 @@ async function maybeFinalizeDayVote(client, gameManager, game) {
 }
 
 async function resolveAndAnnounceDayVote(client, gameManager, game) {
-  stopVoteBump(game);
-  const result = engine.resolveDayVote(game);
+  // Cung 1 co chan re-entrancy nhu resolveAndAnnounceNight (2 phase khong bao gio chay dong thoi
+  // nen dung chung 1 co la an toan) - tranh treo co/thong bao ngay 2 lan neu 2 su kien gan nhau.
+  if (game._resolvingPhase) return;
+  game._resolvingPhase = true;
+  try {
+    stopVoteBump(game);
+    const result = engine.resolveDayVote(game);
 
-  if (result.log) {
-    for (const entry of result.log) {
-      const p = game.players.get(entry.userId);
-      game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
+    if (result.log) {
+      for (const entry of result.log) {
+        const p = game.players.get(entry.userId);
+        game.gameLog.push({ dayNumber: game.dayNumber, userId: entry.userId, roleId: p ? p.roleId : null, text: entry.text });
+      }
     }
-  }
 
-  if (!result.lynchedUserId) {
-    let reason;
-    if (result.tie) reason = '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.';
-    else if (result.notEnough) reason = '🗳️ Không ai đạt quá bán số người còn sống — không ai bị treo cổ hôm nay.';
-    else reason = '🗳️ Không có phiếu hợp lệ / mọi người chọn không treo ai — không ai bị treo cổ hôm nay.';
-    await channelSend(client, game.channelId, reason);
-  } else {
-    await channelSend(client, game.channelId, `⚰️ **${nameOf(game, result.lynchedUserId)}** đã bị dân làng treo cổ.`);
-    if (result.extraDeaths && result.extraDeaths.length) {
-      const extraNames = result.extraDeaths.map((d) => nameOf(game, d.userId));
-      await channelSend(client, game.channelId, extraNames.map((n) => `💀 **${n}** cũng chết theo.`).join('\n'));
+    if (!result.lynchedUserId) {
+      let reason;
+      if (result.tie) reason = '⚖️ Phiếu bầu hòa nhau — không ai bị treo cổ hôm nay.';
+      else if (result.notEnough) reason = '🗳️ Không ai đạt quá bán số người còn sống — không ai bị treo cổ hôm nay.';
+      else reason = '🗳️ Không có phiếu hợp lệ / mọi người chọn không treo ai — không ai bị treo cổ hôm nay.';
+      await channelSend(client, game.channelId, reason);
+    } else {
+      await channelSend(client, game.channelId, `⚰️ **${nameOf(game, result.lynchedUserId)}** đã bị dân làng treo cổ.`);
+      if (result.extraDeaths && result.extraDeaths.length) {
+        const extraNames = result.extraDeaths.map((d) => nameOf(game, d.userId));
+        await channelSend(client, game.channelId, extraNames.map((n) => `💀 **${n}** cũng chết theo.`).join('\n'));
+      }
     }
-  }
 
-  if (result.foolWins) {
-    await endGame(client, gameManager, game, 'FOOL', { extraWinnerUserId: result.lynchedUserId });
-    return;
-  }
+    if (result.foolWins) {
+      await endGame(client, gameManager, game, 'FOOL', { extraWinnerUserId: result.lynchedUserId });
+      return;
+    }
 
-  const winner = engine.checkWinner(game);
-  if (winner) {
-    await endGame(client, gameManager, game, winner);
-    return;
-  }
+    const winner = engine.checkWinner(game);
+    if (winner) {
+      await endGame(client, gameManager, game, winner);
+      return;
+    }
 
-  game.dayNumber += 1;
-  await beginNight(client, gameManager, game);
+    game.dayNumber += 1;
+    await beginNight(client, gameManager, game);
+  } finally {
+    game._resolvingPhase = false;
+  }
 }
 
 // ============ END GAME ============

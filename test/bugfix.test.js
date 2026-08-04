@@ -22,15 +22,11 @@ function run() {
     gm.submitCaveTarget(game, 'cave1', 'p1');
     assert.strictEqual(game.night.caveTarget, 'p1');
 
-    let threw = false;
-    try {
-      gm.submitCaveTarget(game, 'cave1', 'p2'); // thu ngu them 1 nguoi nua cung dem
-    } catch (err) {
-      threw = true;
-      assert.match(err.message, /đã chọn/);
-    }
-    assert.strictEqual(threw, true, 'Cave phai bi chan khi chon nguoi thu 2 trong cung 1 dem');
-    console.log('✅ Bug 1 OK: Cave không thể ngủ 2 người trong cùng 1 đêm');
+    // Cave duoc phep DOI Y trong cung 1 dem (chon lai truoc khi dem ket thuc) - lua chon
+    // cuoi cung se duoc tinh, khong con bi chan nhu truoc.
+    gm.submitCaveTarget(game, 'cave1', 'p2');
+    assert.strictEqual(game.night.caveTarget, 'p2', 'Cave duoc phep doi lua chon trong cung 1 dem, lay lua chon CUOI CUNG');
+    console.log('✅ Bug 1 OK: Cave được phép đổi ý (chọn lại) trong cùng 1 đêm, lấy lựa chọn cuối cùng');
   }
 
   // ---------------------------------------------------------------------

@@ -152,6 +152,12 @@ function resolveNight(game) {
   if (witchAction && witchAction.type === 'poison' && witchAction.targetId) {
     deaths.set(witchAction.targetId, 'witch_poison');
   }
+  // Mat binh du bi Cave vo hieu hoa - dung night.witchAction GOC (truoc khi bi null hoa o tren),
+  // va chi chot o day (khong chot ngay luc submit) de Phu Thuy con doi y trong cung 1 dem.
+  if (night.witchAction && witchHolder) {
+    if (night.witchAction.type === 'heal') witchHolder.state.healUsed = true;
+    if (night.witchAction.type === 'poison') witchHolder.state.poisonUsed = true;
+  }
 
   // --- Sói Nguyền curse ---
   if (night.curseTarget && !curseNullified) {
