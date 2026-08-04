@@ -1,4 +1,6 @@
-const { ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
+const {
+  ActionRowBuilder, StringSelectMenuBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle,
+} = require('discord.js');
 const { ROLES, FACTION } = require('../game/constants');
 const swCommand = require('../commands/simwolf');
 const flow = require('../game/flow');
@@ -101,10 +103,42 @@ module.exports = {
             .setMaxValues(options.length)
             .addOptions(options);
           await interaction.reply({
-            content: 'Chọn role cho ván này (phần còn lại sẽ tự động là Dân Thường / Sói Thường theo tỉ lệ mặc định):',
+            content: 'Chọn các **vai trò đặc biệt** cho ván này (dùng nút **🔢 Số Dân/Sói** riêng để chỉ định chính xác số Dân Thường / Sói Thường — nếu không chỉ định, phần còn lại sẽ tự động là Dân Thường):',
             components: [new ActionRowBuilder().addComponents(menu)],
             flags: MessageFlags.Ephemeral,
           });
+          return;
+        }
+
+        if (interaction.customId === 'sw_set_dan_soi') {
+          if (!game) {
+            await interaction.reply({ content: '⚠️ Phòng đã bị đóng hoặc chưa được tạo — dùng `/simwolf create` để tạo phòng mới.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          if (game.hostId !== interaction.user.id) {
+            await interaction.reply({ content: '⛔ Chỉ host mới được chọn số lượng.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const modal = new ModalBuilder().setCustomId('sw_dan_soi_modal').setTitle('Số Dân Thường / Sói Thường');
+          const danInput = new TextInputBuilder()
+            .setCustomId('dan_count')
+            .setLabel('Số Dân Thường (để trống = tự động)')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setPlaceholder('vd: 3');
+          if (game.selectedDanCount != null) danInput.setValue(String(game.selectedDanCount));
+          const soiInput = new TextInputBuilder()
+            .setCustomId('soi_count')
+            .setLabel('Số Sói Thường (để trống = tự động)')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setPlaceholder('vd: 2');
+          if (game.selectedSoiCount != null) soiInput.setValue(String(game.selectedSoiCount));
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(danInput),
+            new ActionRowBuilder().addComponents(soiInput),
+          );
+          await interaction.showModal(modal);
           return;
         }
 
@@ -385,6 +419,46 @@ module.exports = {
           await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: MessageFlags.Ephemeral });
         } catch (replyErr) {
           console.error('[Failed to notify user of select menu error]', replyErr);
+        }
+      }
+      return;
+    }
+
+    // 4. Modal submit
+    if (interaction.isModalSubmit()) {
+      try {
+        if (interaction.customId === 'sw_dan_soi_modal') {
+          const parseCount = (raw) => {
+            const trimmed = (raw || '').trim();
+            if (trimmed === '') return null; // de trong = "tu dong", khong dung so nay
+            const n = Number(trimmed);
+            if (!Number.isInteger(n) || n < 0) throw new Error(`Giá trị "${trimmed}" không hợp lệ — phải là số nguyên ≥ 0 (hoặc để trống).`);
+            return n;
+          };
+          const danCount = parseCount(interaction.fields.getTextInputValue('dan_count'));
+          const soiCount = parseCount(interaction.fields.getTextInputValue('soi_count'));
+
+          gameManager.setDanSoiCounts(interaction.guildId, interaction.user.id, danCount, soiCount);
+          const game = gameManager.getGame(interaction.guildId);
+
+          const summary = danCount == null && soiCount == null
+            ? 'Đã bỏ chỉ định — phần còn lại sẽ tự động là Dân Thường.'
+            : `✅ Đã đặt: 🧑‍🌾 ${danCount ?? 0} Dân Thường · 🐺 ${soiCount ?? 0} Sói Thường.`;
+          await interaction.reply({ content: summary, flags: MessageFlags.Ephemeral });
+
+          const lobbyMsg = await interaction.channel.messages.fetch({ limit: 20 })
+            .then((msgs) => msgs.find((m) => m.author.id === interaction.client.user.id && m.embeds[0]?.title?.includes('PHÒNG CHỜ')));
+          if (lobbyMsg) {
+            await lobbyMsg.edit({ embeds: [swCommand.buildLobbyEmbed(game)], components: swCommand.buildLobbyButtons() });
+          }
+          return;
+        }
+      } catch (err) {
+        console.error('[Modal submit interaction error]', err);
+        try {
+          await replyOrFollowUp(interaction, { content: `⚠️ ${err.message}`, flags: MessageFlags.Ephemeral });
+        } catch (replyErr) {
+          console.error('[Failed to notify user of modal error]', replyErr);
         }
       }
     }

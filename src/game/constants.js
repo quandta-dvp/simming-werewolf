@@ -122,26 +122,35 @@ function getDefaultWolfCount(playerCount) {
   return 5; // 17-20
 }
 
-// Bo role mac dinh khi host khong bam "Chon Vai"
+// Bo role mac dinh khi host khong bam "Chon Vai". Dam bao 2 dieu kien CUNG BAT BUOC:
+// - Luon co DUNG playerCount role (khong duoc thua/thieu so voi so nguoi choi that su).
+// - Luon co IT NHAT 1 Dan Thuong va 1 Soi Thuong (2 role mac dinh co ban buoc phai co) -
+//   danh rieng 1 "slot" cho Dan Thuong truoc, cac vai dac biet (Tien Tri, Bao Ve, Phu Thuy,
+//   Tho San, Cave) chi duoc them vao NEU con du cho, khong de chung lan het slot cua Dan Thuong.
 function getDefaultRoleSet(playerCount) {
-  const wolfCount = getDefaultWolfCount(playerCount);
   const roles = [];
 
-  let wolfSlots = wolfCount;
-  if (playerCount >= 14) {
+  // Vi luon phai danh rieng >=1 slot cho Dan Thuong, ngan so Soi lai neu can de khong vuot qua.
+  const wolfBudget = Math.max(1, Math.min(getDefaultWolfCount(playerCount), playerCount - 1));
+
+  let wolfSlots = wolfBudget;
+  if (playerCount >= 14 && wolfSlots >= 2) {
     roles.push('SOI_CON');
     wolfSlots -= 1;
   }
   for (let i = 0; i < wolfSlots; i++) roles.push('SOI_THUONG');
+  if (!roles.includes('SOI_THUONG')) roles.push('SOI_THUONG'); // dam bao luon co >=1 Soi Thuong "thuong", khong chi toan Soi dac biet
 
-  const villagerSpecials = ['TIEN_TRI', 'BAO_VE'];
-  if (playerCount >= 8) villagerSpecials.push('PHU_THUY');
-  if (playerCount >= 11) villagerSpecials.push('THO_SAN');
-  if (playerCount >= 14) villagerSpecials.push('CAVE');
-  roles.push(...villagerSpecials);
+  const villagerCandidates = ['TIEN_TRI', 'BAO_VE'];
+  if (playerCount >= 8) villagerCandidates.push('PHU_THUY');
+  if (playerCount >= 11) villagerCandidates.push('THO_SAN');
+  if (playerCount >= 14) villagerCandidates.push('CAVE');
 
-  const filled = roles.length;
-  const remaining = playerCount - filled;
+  for (const roleId of villagerCandidates) {
+    if (roles.length < playerCount - 1) roles.push(roleId); // luon chua lai it nhat 1 slot cho Dan Thuong
+  }
+
+  const remaining = playerCount - roles.length; // >= 1 luon dung nho reservation o tren
   for (let i = 0; i < remaining; i++) roles.push('DAN_THUONG');
 
   return roles;

@@ -39,6 +39,8 @@ class GameManager {
       status: 'LOBBY', // LOBBY | RUNNING | ENDED
       players: new Map(), // userId -> { userId, roleId, faction, isAlive, state }
       selectedRoles: null, // null = chua chon, se dung default set
+      selectedDanCount: null, // null = chua chi dinh, tu dong fill Dan Thuong cho du so nguoi
+      selectedSoiCount: null, // null = chua chi dinh so luong Soi Thuong cu the
       dayNumber: 0,
       phase: null, // NIGHT | DAY_DISCUSS | DAY_VOTE
       night: null,
@@ -106,17 +108,56 @@ class GameManager {
     return game;
   }
 
+  setDanSoiCounts(guildId, hostId, danCount, soiCount) {
+    const game = this.getGame(guildId);
+    if (!game) throw new Error('Không có phòng nào đang mở.');
+    if (game.hostId !== hostId) throw new Error('Chỉ host mới được chọn vai.');
+    if (danCount != null && (!Number.isInteger(danCount) || danCount < 0)) {
+      throw new Error('Số Dân Thường phải là số nguyên ≥ 0.');
+    }
+    if (soiCount != null && (!Number.isInteger(soiCount) || soiCount < 0)) {
+      throw new Error('Số Sói Thường phải là số nguyên ≥ 0.');
+    }
+    game.selectedDanCount = danCount;
+    game.selectedSoiCount = soiCount;
+    this._persist(game);
+    return game;
+  }
+
   /**
    * Tinh danh sach role cuoi cung se dung khi start:
-   * - Neu host da chon roleIds cu the -> fill Dan Thuong cho du so nguoi choi.
-   * - Neu chua chon -> dung bo default theo constants.js
+   * - Neu host chua chon gi ca (khong role dac biet, khong so luong Dan/Soi) -> dung bo default.
+   * - Neu host da chi dinh so luong Dan Thuong va/hoac Soi Thuong cu the -> tong so
+   *   (vai dac biet + Dan + Soi) BAT BUOC khop dung so nguoi choi, khong tu dong fill them.
+   * - Neu host chi chon vai dac biet (chua chi dinh so luong Dan/Soi) -> giu hanh vi cu:
+   *   fill het phan con lai bang Dan Thuong.
    */
   resolveFinalRoleList(game) {
     const playerCount = game.players.size;
-    if (!game.selectedRoles || game.selectedRoles.length === 0) {
+    const hasCustomCounts = game.selectedDanCount != null || game.selectedSoiCount != null;
+
+    if ((!game.selectedRoles || game.selectedRoles.length === 0) && !hasCustomCounts) {
       return getDefaultRoleSet(playerCount);
     }
-    const roles = [...game.selectedRoles];
+
+    const specialRoles = [...(game.selectedRoles || [])];
+
+    if (hasCustomCounts) {
+      const danCount = game.selectedDanCount ?? 0;
+      const soiCount = game.selectedSoiCount ?? 0;
+      const roles = [...specialRoles];
+      for (let i = 0; i < soiCount; i++) roles.push('SOI_THUONG');
+      for (let i = 0; i < danCount; i++) roles.push('DAN_THUONG');
+      if (roles.length !== playerCount) {
+        throw new Error(
+          `Tổng số role (${specialRoles.length} vai đặc biệt + ${danCount} Dân Thường + ${soiCount} Sói Thường = ${roles.length}) `
+          + `phải khớp ĐÚNG số người chơi hiện tại (${playerCount}). Hãy điều chỉnh lại số Dân/Sói hoặc danh sách vai đặc biệt.`,
+        );
+      }
+      return roles;
+    }
+
+    const roles = [...specialRoles];
     if (roles.length > playerCount) {
       throw new Error(`Số role đã chọn (${roles.length}) nhiều hơn số người chơi (${playerCount}).`);
     }

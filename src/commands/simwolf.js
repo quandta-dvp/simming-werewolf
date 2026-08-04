@@ -34,6 +34,11 @@ function buildLobbyEmbed(game, client) {
     ? game.selectedRoles.map((rid) => `${ROLES[rid].emoji} ${ROLES[rid].name}`).join(', ')
     : '_Host chưa chọn vai — sẽ dùng bộ mặc định_';
 
+  const hasCustomCounts = game.selectedDanCount != null || game.selectedSoiCount != null;
+  const countsText = hasCustomCounts
+    ? `🧑‍🌾 Dân Thường: **${game.selectedDanCount ?? 0}** · 🐺 Sói Thường: **${game.selectedSoiCount ?? 0}**`
+    : '_Chưa chỉ định — phần còn lại tự động là Dân Thường_';
+
   return new EmbedBuilder()
     .setTitle('🐺 SIMMING WEREWOLF · PHÒNG CHỜ')
     .setColor(0x8b0000)
@@ -41,7 +46,8 @@ function buildLobbyEmbed(game, client) {
       { name: 'Host', value: `<@${game.hostId}>`, inline: true },
       { name: 'Trạng thái', value: game.players.size >= MIN_PLAYERS ? '✅ Đủ điều kiện bắt đầu' : `Cần thêm ${MIN_PLAYERS - game.players.size} người`, inline: true },
       { name: `👥 Người chơi — ${game.players.size}/${MAX_PLAYERS}`, value: playerList },
-      { name: '🃏 Vai trò đã chọn', value: roleText },
+      { name: '🃏 Vai trò đặc biệt đã chọn', value: roleText },
+      { name: '🔢 Số Dân Thường / Sói Thường', value: countsText },
       { name: '\u200b', value: '🌙 Đêm — Mỗi phe hành động bí mật\n☀️ Ngày — Thảo luận & vote loại 1 người\n🏆 Thắng — Tiêu diệt toàn bộ đối phương\n⚠️ Tối thiểu 6 người · Tối đa 20 người' },
     )
     .setFooter({ text: `${config.botName} · Bấm nút bên dưới để tham gia!` })
@@ -60,7 +66,10 @@ function buildLobbyButtons() {
     new ButtonBuilder().setCustomId('sw_status').setLabel('Trạng Thái').setEmoji('📄').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('sw_cancel').setLabel('Hủy Phòng').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
   );
-  return [row1, row2];
+  const row3 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('sw_set_dan_soi').setLabel('Số Dân/Sói').setEmoji('🔢').setStyle(ButtonStyle.Secondary),
+  );
+  return [row1, row2, row3];
 }
 
 function buildRoleListEmbed() {
@@ -117,7 +126,7 @@ module.exports = {
           '**Cách chơi cơ bản:**\n'
           + '1. `/simwolf create` để mở phòng chờ.\n'
           + '2. Mọi người bấm **Tham Gia** (tối thiểu 6, tối đa 20 người).\n'
-          + '3. Host bấm **Chọn Vai** để tùy chỉnh role, hoặc để trống dùng bộ mặc định.\n'
+          + '3. Host bấm **Chọn Vai** để tùy chỉnh vai trò đặc biệt, và **🔢 Số Dân/Sói** để chỉ định chính xác số Dân Thường / Sói Thường (không bắt buộc — để trống thì phần còn lại tự động là Dân Thường).\n'
           + '4. Host bấm **Bắt Đầu Game** — bot random vai trò, mỗi người bấm nút **Xem Vai Trò Của Bạn** để xem role riêng (chỉ mình bạn thấy).\n'
           + '5. Bot tạo **thread riêng cho từng vai trò có chức năng** (Tiên Tri, Bảo Vệ, Phù Thủy, Cave, Thợ Săn, Bầy Sói) — Host được thêm vào mọi thread để theo dõi (không chơi).\n'
           + '6. Đêm: vào thread tương ứng để thao tác (bầy Sói thấy vote của nhau ngay trong thread).\n'

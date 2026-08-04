@@ -463,6 +463,34 @@ function logNightActions(game) {
   }
 }
 
+// Gui rieng cho HOST (DM) toan bo lua chon rieng tu cua Bao Ve va Cave dem nay - 2 vai nay
+// chi co 1 nguoi giu va lua chon rat "im lang" (khong co tally cong khai nhu vote Soi), nen
+// host de bi mu thong tin neu khong tu vao tung thread rieng doc lai. Goi TRUOC khi resolve
+// (dung gia tri goc, chua bi anh huong boi Cave vo hieu hoa) de host thay dung y dinh that.
+async function sendHostNightRecap(client, game) {
+  const night = game.night;
+  if (!night) return;
+
+  const lines = [];
+  const guardHolder = engine.getPlayerByRole(game, 'BAO_VE');
+  if (guardHolder && night.guardTarget !== undefined) {
+    lines.push(`🛡️ **${nameOf(game, guardHolder.userId)}** (Bảo Vệ) chọn: ${night.guardTarget ? `bảo vệ **${nameOf(game, night.guardTarget)}**` : 'không bảo vệ ai'}`);
+  }
+  const caveHolder = engine.getPlayerByRole(game, 'CAVE');
+  if (caveHolder && night.caveTarget !== undefined) {
+    lines.push(`🕊️ **${nameOf(game, caveHolder.userId)}** (Cave) chọn: ${night.caveTarget === 'ALONE' ? 'ngủ một mình' : `ngủ cùng **${nameOf(game, night.caveTarget)}**`}`);
+  }
+
+  if (!lines.length) return; // dem nay khong co Bao Ve/Cave hoac ho chua chon gi ca (vd bi bo qua/da chet)
+
+  try {
+    const host = await client.users.fetch(game.hostId);
+    await host.send(`🕵️ **Tóm tắt riêng cho Host — Đêm ${game.dayNumber}**\n${lines.join('\n')}`);
+  } catch (err) {
+    console.error('[sendHostNightRecap] không DM được host (có thể host tắt DM):', err.message);
+  }
+}
+
 async function resolveAndAnnounceNight(client, gameManager, game) {
   // Chan re-entrancy: neu 2 su kien gan nhau (vd 2 vai tro submit gan nhu cung luc, hoac
   // host bam "Bo Qua" dung luc dem vua du dieu kien resolve) cung goi ham nay, chi cho
@@ -472,6 +500,7 @@ async function resolveAndAnnounceNight(client, gameManager, game) {
   try {
     await disableNightPrompts(client, game);
     logNightActions(game);
+    await sendHostNightRecap(client, game);
     const result = engine.resolveNight(game);
 
     for (const entry of result.log) {
@@ -745,6 +774,7 @@ module.exports = {
   beginNight,
   buildWolfVoteTallyContent,
   checkAndPromptWitch,
+  sendHostNightRecap,
   maybeFinalizeNight,
   resolveAndAnnounceNight,
   openDayVote,
